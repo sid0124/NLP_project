@@ -1,0 +1,86 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "academic-research-intelligence"
+version = "0.1.0"
+description = "Hierarchical, section-aware Transformer attention for interpretable academic paper classification, extended into a research intelligence platform."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Sidharth Arora" }]
+keywords = ["nlp", "text-classification", "hierarchical-attention", "scibert", "openalex"]
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# Runtime dependencies are pinned in requirements.txt, which is the single
+# source of truth for reproducible installs. Keep the two in sync when adding.
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+
+[tool.setuptools.packages.find]
+# Only first-party packages; excludes tests, scripts, notebooks, data.
+include = ["src*"]
+
+# =============================================================================
+# pytest
+# =============================================================================
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# Puts the project root on sys.path so `import src.…` works without requiring
+# an editable install. Keeps a fresh clone runnable immediately (spec §52).
+pythonpath = ["."]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
+markers = [
+    "network: test performs live network I/O (deselect with '-m \"not network\"')",
+    "slow: test takes more than a few seconds",
+]
+filterwarnings = [
+    "error::DeprecationWarning:src.*",
+]
+
+# =============================================================================
+# ruff — lint + format (PEP 8, spec §54)
+# =============================================================================
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "data", "results", "notebooks", "mlruns"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort — import ordering
+    "B",    # flake8-bugbear — likely bugs
+    "C4",   # comprehension simplifications
+    "UP",   # pyupgrade — modern syntax
+    "SIM",  # flake8-simplify
+    "PTH",  # prefer pathlib over os.path
+    "RET",  # return-statement hygiene
+    "ARG",  # unused arguments
+    "N",    # pep8-naming
+    "D",    # pydocstyle — docstrings are required (spec §54)
+]
+ignore = [
+    "D203",  # conflicts with D211
+    "D213",  # conflicts with D212
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests document themselves through names; scripts are thin argparse wrappers.
+"tests/**" = ["D100", "D101", "D102", "D103", "D104", "ARG001", "ARG002"]
+"scripts/**" = ["D100", "E402"]  # E402: sys.path bootstrap must precede imports

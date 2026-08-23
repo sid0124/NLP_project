@@ -1,0 +1,133 @@
+# =============================================================================
+# Dataset / ingestion configuration
+# =============================================================================
+# Contract verified against the live OpenAlex API on 2026-08-23:
+#   - cursor pagination: cursor=* -> meta.next_cursor
+#   - `select` sparse fieldsets and `per-page` (max 200) are honoured
+#   - `filter` takes comma-separated AND clauses
+#   - primary_topic exposes topic -> subfield -> field -> domain
+#   - abstracts arrive as `abstract_inverted_index` = {term: [positions]}
+# OpenAlex data is CC0, so a small snapshot may be committed to data/sample/.
+# =============================================================================
+
+openalex:
+  base_url: "https://api.openalex.org/works"
+  # OpenAlex asks callers to identify themselves; this puts requests in the
+  # faster, more reliable "polite pool". Set OPENALEX_MAILTO in .env.
+  polite_pool: true
+  per_page: 200
+
+  # Papers fetched per label class. Fetching per class yields a balanced,
+  # stratified corpus by construction; small classes that cannot fill the cap
+  # produce mild natural imbalance, which the class-weighting in model.yaml
+  # and the macro-averaged metrics are there to handle (spec §37).
+  max_records_per_class: 1500
+
+  # Server-side filters. Values use OpenAlex short IDs (e.g. "fields/17"),
+  # even though responses echo them back as full URLs.
+  filters:
+    from_publication_date: "2019-01-01"
+    to_publication_date: "2025-12-31"
+    language: "languages/en"
+    type: "types/article"
+    has_abstract: true
+
+  # Sparse fieldset keeps payloads small and fetches fast. `referenced_works`
+  # is retained now so the (much later, optional) citation-graph module has
+  # data to work with instead of requiring a full re-fetch.
+  select:
+    - id
+    - doi
+    - title
+    - publication_year
+    - publication_date
+    - language
+    - type
+    - primary_location
+    - authorships
+    - abstract_inverted_index
+    - primary_topic
+    - topics
+    - keywords
+    - referenced_works
+
+  request:
+    timeout_seconds: 45
+    max_retries: 5
+    backoff_factor: 1.5      # exponential backoff between retries
+    retry_on_status: [429, 500, 502, 503, 504]
+    sleep_between_requests: 0.12   # be a good API citizen
+
+  # ---------------------------------------------------------------------------
+  # Label space. Keys must match configs/config.yaml -> labels.taxonomy_level.
+  # ---------------------------------------------------------------------------
+  # 11 subfields of Computer Science (field 17). Deliberately confusable:
+  # AI vs Computer Vision vs Signal Processing share heavy terminology, which
+  # is exactly the discrimination the hierarchical model must later improve on.
+  subfield:
+    filter_key: "primary_topic.subfield.id"
+    targets:
+      - {id: "subfields/1702", name: "Artificial Intelligence"}
+      - {id: "subfields/1703", name: "Computational Theory and Mathematics"}
+      - {id: "subfields/1704", name: "Computer Graphics and Computer-Aided Design"}
+      - {id: "subfields/1705", name: "Computer Networks and Communications"}
+      - {id: "subfields/1706", name: "Computer Science Applications"}
+      - {id: "subfields/1707", name: "Computer Vision and Pattern Recognition"}
+      - {id: "subfields/1708", name: "Hardware and Architecture"}
+      - {id: "subfields/1709", name: "Human-Computer Interaction"}
+      - {id: "subfields/1710", name: "Information Systems"}
+      - {id: "subfields/1711", name: "Signal Processing"}
+      - {id: "subfields/1712", name: "Software"}
+
+  # Broad alternative: 26 research domains spanning all of science. Enable by
+  # setting labels.taxonomy_level: field in configs/config.yaml.
+  field:
+    filter_key: "primary_topic.field.id"
+    targets:
+      - {id: "fields/17", name: "Computer Science"}
+      - {id: "fields/27", name: "Medicine"}
+      - {id: "fields/31", name: "Physics and Astronomy"}
+      - {id: "fields/22", name: "Engineering"}
+      - {id: "fields/26", name: "Mathematics"}
+      - {id: "fields/13", name: "Biochemistry, Genetics and Molecular Biology"}
+      - {id: "fields/32", name: "Psychology"}
+      - {id: "fields/28", name: "Neuroscience"}
+
+# =============================================================================
+# Data validation thresholds -> src/data_pipeline/validation.py (spec §36)
+# =============================================================================
+validation:
+  min_title_chars: 10
+  min_abstract_chars: 200      # abstracts shorter than this are usually stubs
+  max_abstract_chars: 10000
+  allowed_languages: ["en"]
+  # Fraction of records allowed to fail validation before the build aborts
+  # rather than silently training on a degraded corpus.
+  max_invalid_fraction: 0.40
+  # Warn when the biggest class is this many times larger than the smallest.
+  imbalance_warn_ratio: 10.0
+
+# =============================================================================
+# Deduplication -> src/data_pipeline/dedup.py
+# Runs on the WHOLE corpus BEFORE splitting, so no paper (or near-copy of one)
+# can straddle train and test (spec §9).
+# =============================================================================
+dedup:
+  exact:
+    enabled: true
+    # Checked in order; first available key wins. Empty values never match.
+    keys: [openalex_id, doi, title_abstract_hash]
+  near_duplicate:
+    enabled: true
+    shingle_size: 5          # word n-gram size for shingling
+    jaccard_threshold: 0.85  # >= this similarity counts as a near-duplicate
+    # Candidate blocking via bottom-k shingle sketches. Exhaustive comparison is
+    # O(n^2) -- 16k papers is 135M pairs -- so each paper contributes only its k
+    # smallest shingle hashes to an inverted index, and just the papers sharing
+    # one are compared exactly. Set to 0 to compare all pairs (small corpora and
+    # tests only).
+    sketch_size: 64
+    # Shingles occurring in more than this many papers are boilerplate phrasing
+    # ("in this paper we propose"); their buckets are skipped to avoid a
+    # quadratic blow-up of candidates that are almost never duplicates.
+    max_bucket_size: 200

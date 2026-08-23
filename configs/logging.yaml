@@ -1,0 +1,49 @@
+# =============================================================================
+# Logging configuration (Python logging.config.dictConfig schema)
+# =============================================================================
+# Applied by src.utils.logging.setup_logging(), which additionally forces
+# stdout/stderr to UTF-8. That step cannot be expressed in dictConfig but is
+# essential here: Windows consoles default to cp1252 and academic metadata is
+# full of non-ASCII author names and titles, which would otherwise raise
+# UnicodeEncodeError mid-pipeline.
+# =============================================================================
+version: 1
+disable_existing_loggers: false
+
+filters:
+  # Injects run_id / stage onto every record so a single run can be traced
+  # end to end through the logs (spec §41).
+  run_context:
+    (): src.utils.logging.RunContextFilter
+
+formatters:
+  plain:
+    format: "%(asctime)s | %(levelname)-7s | %(name)-28s | %(message)s"
+    datefmt: "%Y-%m-%dT%H:%M:%S"
+  traceable:
+    format: "%(asctime)s | %(levelname)-7s | run=%(run_id)s | %(name)-28s | %(message)s"
+    datefmt: "%Y-%m-%dT%H:%M:%S"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: traceable
+    filters: [run_context]
+    stream: "ext://sys.stdout"
+
+root:
+  level: INFO
+  handlers: [console]
+
+loggers:
+  # Third-party libraries are muted to keep pipeline output readable.
+  urllib3:
+    level: WARNING
+    propagate: true
+  matplotlib:
+    level: WARNING
+    propagate: true
+  PIL:
+    level: WARNING
+    propagate: true

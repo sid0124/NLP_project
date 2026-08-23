@@ -1,0 +1,77 @@
+# =============================================================================
+# Model configuration — Milestone 1 (classical baselines only)
+# =============================================================================
+# Baselines are declared here, not in code, so a new baseline is a config entry
+# plus a registry line rather than an edit to the training script (spec §12).
+# Transformer / HAN configuration arrives in Milestone 2 as an `encoder:` block.
+# =============================================================================
+
+# Shared feature extractors, referenced by name from each baseline below.
+vectorizers:
+  tfidf_word:
+    type: tfidf
+    params:
+      max_features: 200000
+      ngram_range: [1, 2]     # unigrams + bigrams ("neural network", "vision transformer")
+      min_df: 2               # drop terms appearing in a single document
+      max_df: 0.9             # drop terms present in >90% of documents
+      sublinear_tf: true      # 1 + log(tf); dampens repeated-term dominance
+      strip_accents: unicode
+      lowercase: true
+      stop_words: english
+
+baselines:
+  # ---- Baseline 1 (spec §12) -------------------------------------------------
+  tfidf_logreg:
+    display_name: "TF-IDF + Logistic Regression"
+    vectorizer: tfidf_word
+    classifier:
+      type: logistic_regression
+      params:
+        C: 4.0
+        max_iter: 2000
+        # Counteracts residual class imbalance without resampling text,
+        # which the spec explicitly warns against (§37).
+        class_weight: balanced
+        # liblinear is fast on high-dimensional sparse TF-IDF and exposes
+        # predict_proba, which the calibration work in a later milestone needs.
+        solver: liblinear
+
+  # ---- Baseline 2 (spec §12) -------------------------------------------------
+  tfidf_svm:
+    display_name: "TF-IDF + Linear SVM"
+    vectorizer: tfidf_word
+    classifier:
+      type: linear_svc
+      params:
+        C: 0.5
+        class_weight: balanced
+        max_iter: 5000
+        dual: auto
+      # NOTE: LinearSVC exposes decision_function but not predict_proba.
+      # The evaluation layer degrades gracefully and skips probability-only
+      # metrics for this model rather than failing.
+
+training:
+  # Which split drives model selection; test is touched only for final numbers.
+  eval_split: val
+  # Also score the test split at the end of a run.
+  score_test: true
+  # Persist the fitted pipeline to results/<run_id>/model.joblib
+  save_model: true
+
+evaluation:
+  # Averaging strategies reported for every run (spec §13).
+  averages: [macro, micro, weighted]
+  # Macro F1 is the headline metric: it weights every class equally and so is
+  # not flattered by good performance on the largest class alone.
+  primary_metric: macro_f1
+  per_class_metrics: true
+  # Multi-label-only metric; computed when labels.mode == multilabel.
+  hamming_loss: true
+  plots:
+    confusion_matrix: true
+    class_distribution: true
+    normalize_confusion_matrix: true
+    dpi: 150
+    figure_format: png

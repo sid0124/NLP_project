@@ -1,0 +1,29 @@
+# Milestone 1 — Research Dataset + Reproducible Baseline
+# Pinned for Python 3.11. No torch/transformers yet (those arrive in Milestone 2).
+# These are direct dependencies; run `pip freeze > requirements-lock.txt` for a full lock.
+
+# --- Core scientific stack ---
+numpy==1.26.4
+scipy==1.13.1
+pandas==2.2.2
+scikit-learn==1.5.1
+
+# --- Visualization (confusion matrix, class distribution) ---
+matplotlib==3.9.2
+seaborn==0.13.2
+
+# --- Configuration & typed schemas ---
+pydantic==2.8.2
+pydantic-settings==2.4.0
+python-dotenv==1.0.1
+PyYAML==6.0.2
+
+# --- HTTP client for OpenAlex ingestion ---
+requests==2.32.3
+
+# --- Model persistence & progress bars ---
+joblib==1.4.2
+tqdm==4.66.5
+
+# --- Testing ---
+pytest==8.3.2

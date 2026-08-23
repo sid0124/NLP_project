@@ -1,0 +1,78 @@
+# =============================================================================
+# Master configuration — Academic Research Intelligence System
+# =============================================================================
+# Nothing in the codebase hard-codes paths, seeds, thresholds, or model names
+# (master spec §32). Values here may be overridden by environment variables
+# (see .env.example) or by CLI flags on the scripts in scripts/.
+# =============================================================================
+
+project:
+  name: academic-research-intelligence
+  version: "0.1.0"
+  # Global random seed. Propagated to numpy / sklearn / python `random`
+  # by src.utils.seed.set_seed() for reproducibility (spec §51).
+  seed: 42
+
+paths:
+  data_dir: data
+  raw_dir: data/raw            # immutable API payloads + fetch manifests
+  interim_dir: data/interim    # post-validation / post-dedup intermediates
+  processed_dir: data/processed # final train/val/test splits + manifest
+  sample_dir: data/sample      # committed snapshot -> pipeline runs offline
+  external_dir: data/external
+  results_dir: results         # per-run metrics, reports, plots, artifacts
+  logs_dir: logs
+
+ingestion:
+  # Selects the concrete IngestionSource implementation. Adding a new source
+  # (e.g. semantic_scholar) means registering it, not editing the pipeline.
+  source: openalex
+
+labels:
+  # multiclass -> single label per paper (softmax-style).
+  # multilabel  -> set of labels per paper (sigmoid-style, Milestone 3+).
+  # The whole pipeline honours this flag; switching modes requires no code edit.
+  mode: multiclass
+
+  # Level of the OpenAlex topic hierarchy used as the label space:
+  #   topic -> subfield -> field -> domain
+  #   "subfield" (default): 11 confusable classes within Computer Science.
+  #     Chosen because the spec's error-analysis example (§46) contrasts
+  #     NLP vs Information Retrieval - a subfield-level distinction. Confusable
+  #     classes are what make the Milestone 3 ablation study meaningful.
+  #   "field": 26 broad research domains spanning all of science.
+  taxonomy_level: subfield
+
+  # Classes with fewer than this many papers after dedup are dropped, so that
+  # stratified splitting stays valid and metrics stay interpretable.
+  min_class_count: 40
+
+  # Label-space members to discard. "Computer Science Applications" is an
+  # OpenAlex catch-all bucket; listed here so it can be excluded without a
+  # code change if error analysis shows it is mostly noise.
+  exclude_classes: []
+
+  multilabel:
+    # A paper gets every label whose OpenAlex topic score clears this bar.
+    min_topic_score: 0.30
+    max_labels_per_paper: 4
+
+split:
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  # Stratified splitting preserves class proportions in every split (spec §37).
+  stratify: true
+
+# Which text fields are concatenated to form the classifier input.
+# Milestone 1 uses metadata text only; full-text sections arrive with the PDF
+# parser in a later phase, at which point "sections" joins this list.
+text:
+  fields: [title, abstract]
+  lowercase: true
+  strip_urls: true
+  normalize_unicode: true
+  collapse_whitespace: true
+
+logging:
+  level: INFO
