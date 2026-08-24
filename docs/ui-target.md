@@ -2,8 +2,38 @@
 
 Captured from a mockup supplied by the project owner on 2026-08-23. This is the
 **Phase 5 / §30 / §49 deliverable**, recorded now so the requirement is not lost
-and so earlier phases produce the data it needs. Nothing here is built in
-Milestone 1.
+and so earlier phases produce the data it needs.
+
+## Status — built 2026-08-24
+
+The dashboard shell described below **now exists** under [../frontend/](../frontend/),
+built ahead of its phase at the project owner's explicit request. It is static
+and framework-free, makes no network calls, and renders entirely from
+hard-coded mock data in `frontend/js/data.js`. It is therefore **not** part of
+Milestone 1 (§62 excludes the frontend) and neither blocks nor is blocked by the
+baseline work. See [../frontend/README.md](../frontend/README.md) for what is
+real vs. mock, how to run it, and the palette-validation commands.
+
+Two deviations from the mockup, both deliberate:
+
+1. **The mockup's data-series palette was replaced.** It paired blue `#3b82f6`
+   with violet `#8b5cf6` as *adjacent lines* in the trends chart. Measured, that
+   pair sits at CVD ΔE 1.3 (deuteranopia) and normal-vision ΔE 12.0 — below the
+   ΔE 15 floor, so it is hard to separate even with full colour vision and
+   effectively identical for red-green colourblind readers. The indigo/violet
+   accent was kept for *chrome*; the data series use a validated categorical
+   order instead. Both themes re-validated against this project's own surfaces.
+2. **"Similar Papers" sits in the left column, not beside "Ask This Paper".**
+   The focus-paper rail measured ~540px taller than the left column, and at this
+   width a side-by-side pair squeezed the chat composer to 246px. Card placement
+   within the 2-column body adapts to available width; the component set and
+   visual language are unchanged.
+
+One addition beyond the mockup: the papers table includes a deliberately
+**low-confidence, interdisciplinary** row (0.412, `needs_review: true`). The
+mockup showed only 86–94% rows, which would have let the human-review state
+ship untested — §15 requires low-confidence predictions to surface differently
+rather than rendering identically to confident ones.
 
 ## Visual direction
 

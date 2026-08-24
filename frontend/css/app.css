@@ -1,0 +1,1368 @@
+/* ==========================================================================
+   Research Intelligence — application styles
+   ==========================================================================
+   Layout, chrome, and components. Every value comes from tokens.css; there
+   are no raw colours in this file.
+   ========================================================================== */
+
+/* --- Reset ------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+input {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+svg {
+  display: block;
+}
+
+/* Visible focus for keyboard users only — never suppressed outright. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Screen-reader-only: announced, never painted. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 100;
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--accent);
+  color: #fff;
+  border-radius: var(--r-sm);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+/* ==========================================================================
+   Shell
+   ========================================================================== */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: 100vh;
+}
+
+/* --- Sidebar ----------------------------------------------------------- */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-5);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.brand__mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  background: var(--accent-gradient);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.brand__name {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.brand__tagline {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.sidebar__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-5) var(--sp-3) var(--sp-4);
+}
+
+.btn-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-3);
+  margin-bottom: var(--sp-6);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent-gradient);
+  border-radius: var(--r-md);
+  transition: filter 0.15s;
+}
+
+.btn-upload:hover {
+  filter: brightness(1.1);
+}
+
+.nav-group + .nav-group {
+  margin-top: var(--sp-6);
+}
+
+.nav-group__label {
+  padding: 0 var(--sp-3) var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  margin-bottom: 2px;
+  font-size: var(--fs-md);
+  color: var(--text-secondary);
+  border-radius: var(--r-md);
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+
+.nav-item:hover {
+  color: var(--text-primary);
+  background: var(--bg-raised);
+}
+
+/* Active state is background + colour + a weight bump, so it does not rely
+   on hue alone; aria-current carries it to assistive tech. */
+.nav-item[aria-current="page"] {
+  color: var(--accent-ink);
+  background: var(--accent-wash);
+  font-weight: 600;
+}
+
+.nav-item svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+/* --- Storage meter ----------------------------------------------------- */
+
+.storage {
+  flex-shrink: 0;
+  margin: var(--sp-3);
+  padding: var(--sp-4);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+
+.storage__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--sp-3);
+}
+
+.storage__label {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.storage__value {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   Meter — the shared bar primitive
+   ==========================================================================
+   Used by the storage meter, confidence cells, domain scores, and attention
+   weights. The track is a constant; the fill carries the value.
+   ========================================================================== */
+
+.meter {
+  height: 6px;
+  background: var(--track);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.meter--thin {
+  height: 5px;
+}
+
+/* ==========================================================================
+   Top bar
+   ========================================================================== */
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: var(--topbar-h);
+  padding: 0 var(--sp-6);
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.search {
+  position: relative;
+  flex: 1;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.search__icon {
+  position: absolute;
+  top: 50%;
+  left: var(--sp-3);
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search__input {
+  width: 100%;
+  padding: var(--sp-2) 52px var(--sp-2) 38px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+}
+
+.search__input::placeholder {
+  color: var(--text-muted);
+}
+
+.search__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+
+.search__kbd {
+  position: absolute;
+  top: 50%;
+  right: var(--sp-2);
+  transform: translateY(-50%);
+  padding: 2px var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  pointer-events: none;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: var(--text-secondary);
+  border-radius: var(--r-md);
+  transition: background 0.12s, color 0.12s;
+}
+
+.icon-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-raised);
+}
+
+.icon-btn__dot {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-sidebar);
+}
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2) var(--sp-1) var(--sp-1);
+  margin-left: var(--sp-2);
+  border-radius: var(--r-pill);
+  transition: background 0.12s;
+}
+
+.user-chip:hover {
+  background: var(--bg-raised);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.user-chip__name {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.user-chip__role {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+/* ==========================================================================
+   Content area
+   ========================================================================== */
+
+.content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-6);
+}
+
+.greeting {
+  margin-bottom: var(--sp-6);
+}
+
+.greeting__title {
+  font-size: var(--fs-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.greeting__sub {
+  margin-top: 2px;
+  font-size: var(--fs-md);
+  color: var(--text-secondary);
+}
+
+/* --- Card -------------------------------------------------------------- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+}
+
+.card__title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.card__body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--sp-5) var(--sp-5);
+}
+
+.card__foot {
+  padding: var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-base);
+  font-weight: 500;
+  color: var(--accent-ink);
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+/* ==========================================================================
+   Stat tiles
+   ========================================================================== */
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-4);
+}
+
+.stat {
+  display: flex;
+  /* Explicit: .card sets column, and a tile lays its glyph out beside the
+     value rather than under it. */
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+}
+
+.stat__label {
+  font-size: var(--fs-base);
+  color: var(--text-secondary);
+}
+
+.stat__value {
+  margin: var(--sp-2) 0 var(--sp-1);
+  font-size: var(--fs-hero);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  /* Proportional figures: tabular-nums makes a large standalone number
+     look loose. Tabular is for columns, applied on .num below. */
+}
+
+.stat__value--text {
+  font-size: var(--fs-xl);
+  line-height: 1.25;
+}
+
+.stat__delta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+/* Direction is carried by an arrow glyph as well as colour, so the delta
+   never depends on hue alone. */
+.stat__delta--up {
+  color: var(--status-good-ink);
+}
+
+.stat__glyph {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-md);
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Dashboard grid
+   ==========================================================================
+   Two columns, ~58/42. Each column stacks a tall card over a nested pair.
+   ========================================================================== */
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.38fr 1fr;
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.col__pair {
+  display: grid;
+  /* auto-fit, not a fixed 1fr 1fr: the two columns are unequal widths (the
+     left body column is ~700px, the right ~500px). A fixed split forced the
+     right pair to 246px each -- too narrow for the chat composer. auto-fit
+     with a 260px floor lets the wide column stay 2-up while the narrow one
+     stacks, and both collapse gracefully as the viewport shrinks. */
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* ==========================================================================
+   Papers table
+   ========================================================================== */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  /* Fixed, not auto: under auto layout the percentage widths below are only
+     hints, and the content min-widths win. Measured, that gave the domains
+     column 189px -- one 118px chip per line, so a three-domain paper became a
+     three-line row. */
+  table-layout: fixed;
+}
+
+.table th {
+  padding: 0 var(--sp-3) var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.table td {
+  padding: var(--sp-3) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+/* Explicit column widths. The domains column is the widest one because it
+   carries the most ink: two chips plus a gap need ~250px, and anything less
+   stacks them one per line. */
+.table th:nth-child(1) {
+  width: 34%;
+}
+
+.table th:nth-child(2) {
+  width: 40%;
+}
+
+.table th:nth-child(3) {
+  width: 14%;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody tr {
+  transition: background 0.12s;
+}
+
+.table tbody tr:hover {
+  background: var(--bg-raised);
+}
+
+.paper-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.file-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  background: rgba(208, 59, 59, 0.15);
+  color: #e5706f;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.paper-cell__title {
+  font-size: var(--fs-base);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.paper-cell__meta {
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* A domain chip: a coloured dot for identity, text in an ink token.
+   The label never wears the series colour (it would fail contrast at the
+   lighter slots); the dot beside it carries the hue. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px var(--sp-2) 3px 7px;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+}
+
+.chip__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.conf-cell {
+  min-width: 92px;
+}
+
+.conf-cell__value {
+  display: block;
+  margin-bottom: 6px;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.row-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.row-actions .icon-btn {
+  width: 30px;
+  height: 30px;
+}
+
+/* --- Review flag ------------------------------------------------------- *
+ * Master spec §15/§17: a low-confidence prediction must not render
+ * identically to a confident one. Icon + text, never colour alone.        */
+.review-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--status-warning-ink);
+}
+
+/* ==========================================================================
+   Paper preview
+   ========================================================================== */
+
+.preview__head {
+  display: flex;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+}
+
+.preview__thumb {
+  width: 96px;
+  height: 124px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-raised);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.preview__title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.preview__meta {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-base);
+  color: var(--text-secondary);
+}
+
+.preview__abstract {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.section-title {
+  margin-bottom: var(--sp-3);
+  font-size: var(--fs-base);
+  font-weight: 600;
+}
+
+.preview__block + .preview__block {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--border);
+}
+
+/* A labelled bar row: name, meter, value. */
+.bar-row {
+  display: grid;
+  grid-template-columns: 132px 1fr 44px;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 5px 0;
+}
+
+.bar-row__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-base);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-row__value {
+  font-size: var(--fs-base);
+  font-weight: 500;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Caveat note ------------------------------------------------------- *
+ * Master spec §14: attention is evidence visualisation, not proof of
+ * causality. The claim is bounded in the UI, next to the numbers.
+ *
+ * Rendered as a <details> so the caveat is always present and always one
+ * click from the numbers it qualifies, without spending four lines of
+ * vertical space on every panel. Collapsed still shows the summary line --
+ * the disclosure hides the explanation, never the fact that there is one. */
+.note {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-muted);
+  background: var(--bg-inset);
+  border-radius: var(--r-sm);
+}
+
+.note > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--r-sm);
+}
+
+.note > summary::-webkit-details-marker {
+  display: none;
+}
+
+.note > summary:hover {
+  color: var(--text-secondary);
+}
+
+.note__caret {
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+
+.note[open] .note__caret {
+  transform: rotate(180deg);
+}
+
+.note__body {
+  padding: 0 var(--sp-3) var(--sp-3) 30px;
+}
+
+.note svg {
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Charts
+   ========================================================================== */
+
+.donut {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.donut__figure {
+  position: relative;
+}
+
+.donut__center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.donut__total {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.donut__unit {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+/* The legend doubles as the value table: name, count, share. This is the
+   "relief" the light-mode contrast WARN requires — every value is legible
+   as text, so nothing depends on reading the wedge colour. */
+.legend {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.legend__item {
+  display: grid;
+  grid-template-columns: 9px 1fr auto;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+}
+
+.legend__swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.legend__name {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend__value {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.chart-legend__key {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.chart {
+  width: 100%;
+}
+
+.chart text {
+  font-family: var(--font);
+  font-size: 10px;
+  fill: var(--text-muted);
+}
+
+.chart__grid line {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.chart__axis {
+  stroke: var(--axis);
+  stroke-width: 1;
+}
+
+.chart__line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* 2px surface ring so markers stay legible where they cross a line. */
+.chart__dot {
+  stroke: var(--bg-surface);
+  stroke-width: 2;
+}
+
+.chart__hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+
+.chart__crosshair {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* --- Tooltip ----------------------------------------------------------- */
+
+.tooltip {
+  position: fixed;
+  z-index: 60;
+  min-width: 132px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--fs-sm);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.tooltip[data-visible="true"] {
+  opacity: 1;
+}
+
+.tooltip__title {
+  margin-bottom: 5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tooltip__row {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.tooltip__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.tooltip__value {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Table view (the non-visual path to the same numbers) -------------- */
+
+.table-toggle {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.table-toggle:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.data-table {
+  width: 100%;
+  margin-top: var(--sp-4);
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table caption {
+  padding-bottom: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.data-table th,
+.data-table td {
+  padding: 5px var(--sp-2);
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-table th:first-child,
+.data-table td:first-child {
+  text-align: left;
+}
+
+.data-table th {
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.data-table td {
+  color: var(--text-secondary);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ==========================================================================
+   Ask this paper
+   ========================================================================== */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+}
+
+.bubble {
+  max-width: 88%;
+  padding: var(--sp-3);
+  font-size: var(--fs-base);
+  line-height: 1.55;
+  border-radius: var(--r-md);
+}
+
+.bubble--q {
+  align-self: flex-end;
+  color: #fff;
+  background: var(--accent);
+  border-bottom-right-radius: var(--sp-1);
+}
+
+.bubble--a {
+  align-self: flex-start;
+  color: var(--text-secondary);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: var(--sp-1);
+}
+
+/* Provenance line: §20 requires an answer to cite where it came from. */
+.bubble__source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--sp-2);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+.bubble__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-good);
+  flex-shrink: 0;
+}
+
+.composer {
+  position: relative;
+  margin-top: auto;
+}
+
+.composer__input {
+  width: 100%;
+  padding: var(--sp-3) 44px var(--sp-3) var(--sp-3);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font-size: var(--fs-base);
+}
+
+.composer__input::placeholder {
+  color: var(--text-muted);
+}
+
+.composer__input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-wash);
+}
+
+.composer__send {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: #fff;
+  background: var(--accent);
+  border-radius: var(--r-sm);
+}
+
+.composer__send:hover {
+  background: var(--accent-hover);
+}
+
+/* ==========================================================================
+   Similar papers
+   ========================================================================== */
+
+.similar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.similar__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  margin: 0 calc(var(--sp-3) * -1);
+  border-radius: var(--r-md);
+  transition: background 0.12s;
+}
+
+.similar__item:hover {
+  background: var(--bg-raised);
+}
+
+.similar__rank {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.similar__title {
+  font-size: var(--fs-base);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.similar__score {
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ==========================================================================
+   Responsive
+   ==========================================================================
+   Three steps: drop to one body column, collapse the stat row, then hide
+   the sidebar behind a toggle.
+   ========================================================================== */
+
+@media (max-width: 1240px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .stat-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 860px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: var(--sidebar-w);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: var(--shadow-pop);
+  }
+
+  .sidebar[data-open="true"] {
+    transform: none;
+  }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.55);
+  }
+
+  .col__pair {
+    grid-template-columns: 1fr;
+  }
+
+  .content {
+    padding: var(--sp-4);
+  }
+}
+
+@media (min-width: 861px) {
+  .nav-toggle,
+  .scrim {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .stat-row {
+    grid-template-columns: 1fr;
+  }
+
+  .user-chip__text {
+    display: none;
+  }
+
+  /* A keyboard shortcut hint is noise on a touch viewport, and at 375px the
+     search field measures 92px -- the ~28px this frees is worth more. */
+  .search__kbd {
+    display: none;
+  }
+
+  .bar-row {
+    grid-template-columns: 104px 1fr 40px;
+  }
+}
+
+/* Respect a reduced-motion preference: transitions are decoration here. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
