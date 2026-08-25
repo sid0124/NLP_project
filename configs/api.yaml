@@ -1,0 +1,106 @@
+# =============================================================================
+# API configuration — serves the dashboard from real run artifacts
+# =============================================================================
+# The API reads a completed training run out of `results/<run_id>/` and answers
+# the dashboard's questions from it. It trains nothing and writes nothing.
+#
+# Nothing here is hard-coded in Python (master spec §32). Secrets are the one
+# exception in the other direction: the API key is read from the environment
+# (ARIS_API_KEY) and must never appear in this file, which is version-controlled
+# (master spec §32).
+# =============================================================================
+
+server:
+  host: 127.0.0.1        # loopback by default; 0.0.0.0 only behind a proxy
+  port: 8000
+  # Serving the dashboard from the same origin as the API is what makes the
+  # default configuration CORS-free: a same-origin fetch is not a cross-origin
+  # request at all, so the permissive-CORS mistake has no opportunity to happen.
+  serve_frontend: true
+  frontend_dir: frontend
+
+cors:
+  # Explicit origins only. "*" is never correct here: it would let any page on
+  # the internet read this API's responses (master spec §40). These two entries
+  # exist for the case where the dashboard is served by a separate dev server.
+  allow_origins:
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+  allow_credentials: false   # no cookie auth, so credentials must not be echoed
+  allow_methods: [GET, POST]
+  allow_headers: [Content-Type, X-API-Key]
+
+security:
+  # Authentication-ready rather than authenticated (master spec §40). When
+  # ARIS_API_KEY is set in the environment, every /api route except /api/health
+  # requires it in the header named below. With no key set the API is open and
+  # says so loudly at startup, which is correct for a loopback dev server and
+  # visibly wrong for anything else.
+  require_api_key: false
+  api_key_header: X-API-Key
+  # Request bodies above this are rejected with 413 before being read into
+  # memory. The only POST body is a title plus an abstract.
+  max_request_bytes: 65536
+  # Longest text accepted by POST /api/classify. Enforced by the schema, so an
+  # oversized field is a 422 rather than an unbounded vectorizer call.
+  max_text_chars: 20000
+  send_security_headers: true
+
+runs:
+  # Directory holding `<run_id>/` subdirectories. Null falls back to
+  # paths.results_dir in config.yaml, so the layout is defined in one place.
+  results_dir: null
+  # Which run the dashboard shows. Null selects the most recently finished run,
+  # so a fresh `train_baseline.py` is picked up without editing configuration.
+  default_run_id: null
+
+pagination:
+  default_page_size: 10
+  max_page_size: 100
+
+decision:
+  # Predictions at or below this confidence are flagged for human review
+  # (master spec §15). Derived server-side and sent to the UI as a boolean: the
+  # threshold must live in exactly one place, or the two copies will drift.
+  #
+  # 0.60 for a probability. With four classes chance is 0.25, so this is well
+  # clear of chance while still catching the genuinely uncertain cases.
+  review_threshold: 0.60
+  # LinearSVC has no predict_proba, so its confidence is a top-1-minus-top-2
+  # decision margin on an unbounded scale. It needs its own bar; comparing a
+  # margin against a probability threshold would be meaningless.
+  review_margin_threshold: 0.25
+
+similarity:
+  # Nearest neighbours by cosine distance over the run's own fitted TF-IDF
+  # space. This is LEXICAL overlap, not a learned semantic embedding, and the
+  # API labels it as such (master spec §17).
+  top_k: 5
+  min_score: 0.02
+
+explanation:
+  # Per-term contributions to the predicted class for a linear model:
+  # tfidf_value * coefficient, which is exactly the model's own decision sum.
+  # This is not the section-level attention the dashboard was designed around —
+  # that needs the HAN from Milestone 3 — and the API reports it as unavailable
+  # rather than substituting one for the other.
+  top_k_terms: 8
+
+trends:
+  # Publication counts per class per year, read from record metadata. Capped
+  # because a multi-series line chart stops being legible past four lines; the
+  # remainder is reported as a dropped-series count rather than silently cut.
+  max_series: 4
+  min_year: 1900
+
+distribution:
+  # Classes beyond this many collapse into one overflow bucket, so the donut
+  # never needs a hue it has not validated.
+  max_slices: 5
+  other_label: Others
+
+storage:
+  # Operator-set quota for the sidebar meter. Usage itself is measured from
+  # disk, so the bar reflects real bytes against a configured ceiling.
+  quota_gb: 10.0
+  measured_dirs: [data, results]

@@ -146,6 +146,10 @@ def paper_to_record(
             "venue": paper.venue,
             "n_references": paper.reference_count,
             "n_authors": len(paper.authors),
+            # First author only. Enough for a byline ("Zhang, Y. et al.") without
+            # copying the full author list into every record, and the count above
+            # already carries "how many others" (master spec §9).
+            "first_author": paper.authors[0].name if paper.authors else None,
         },
     )
 

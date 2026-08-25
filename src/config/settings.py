@@ -2,7 +2,8 @@
 
 Configuration resolves in three layers, later layers overriding earlier ones:
 
-1. ``configs/config.yaml``, ``configs/dataset.yaml``, ``configs/model.yaml``
+1. ``configs/config.yaml``, ``configs/dataset.yaml``, ``configs/model.yaml``,
+   ``configs/api.yaml``
 2. Environment variables (``.env`` or the real environment)
 3. Explicit keyword overrides passed by a CLI script
 
@@ -24,13 +25,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from src.utils.io import PROJECT_ROOT, read_yaml, resolve_path
 
 __all__ = [
+    "ApiConfig",
     "AppConfig",
     "BaselineConfig",
+    "CorsConfig",
     "DatasetConfig",
+    "DecisionConfig",
     "EnvSettings",
     "LabelsConfig",
     "ModelConfig",
     "PathsConfig",
+    "SecurityConfig",
+    "ServerConfig",
     "Settings",
     "SplitConfig",
     "load_settings",
@@ -419,6 +425,169 @@ class ModelConfig(BaseModel):
 
 
 # ===========================================================================
+# configs/api.yaml
+# ===========================================================================
+class ServerConfig(BaseModel):
+    """Where the API listens, and whether it also serves the dashboard."""
+
+    model_config = _STRICT
+
+    host: str
+    port: int = Field(gt=0, le=65535)
+    serve_frontend: bool
+    frontend_dir: Path
+
+
+class CorsConfig(BaseModel):
+    """Cross-origin policy (master spec §40)."""
+
+    model_config = _STRICT
+
+    allow_origins: list[str]
+    allow_credentials: bool
+    allow_methods: list[str]
+    allow_headers: list[str]
+
+    @property
+    def allows_any_origin(self) -> bool:
+        """True when the configuration permits requests from any origin."""
+        return "*" in self.allow_origins
+
+    @model_validator(mode="after")
+    def _wildcard_origin_forbids_credentials(self) -> CorsConfig:
+        """Reject the wildcard-plus-credentials combination.
+
+        Browsers refuse it anyway, so allowing it here would only produce
+        requests that fail at the client with an opaque CORS error instead of a
+        configuration error naming the cause.
+        """
+        if self.allows_any_origin and self.allow_credentials:
+            raise ValueError(
+                "cors.allow_origins ['*'] cannot be combined with "
+                "allow_credentials: true — list the exact origins instead."
+            )
+        return self
+
+
+class SecurityConfig(BaseModel):
+    """Request limits and the authentication-ready hook (master spec §40)."""
+
+    model_config = _STRICT
+
+    require_api_key: bool
+    api_key_header: str = Field(min_length=1)
+    max_request_bytes: int = Field(gt=0)
+    max_text_chars: int = Field(gt=0)
+    send_security_headers: bool
+
+
+class RunsConfig(BaseModel):
+    """Which training run the API reads."""
+
+    model_config = _STRICT
+
+    #: ``None`` falls back to ``paths.results_dir`` so the layout is defined once.
+    results_dir: Path | None = None
+    #: ``None`` selects the most recently finished run.
+    default_run_id: str | None = None
+
+
+class PaginationConfig(BaseModel):
+    """Page-size bounds for list endpoints."""
+
+    model_config = _STRICT
+
+    default_page_size: int = Field(gt=0)
+    max_page_size: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _default_within_max(self) -> PaginationConfig:
+        """Ensure the default page size is actually requestable."""
+        if self.default_page_size > self.max_page_size:
+            raise ValueError(
+                f"pagination.default_page_size ({self.default_page_size}) exceeds "
+                f"max_page_size ({self.max_page_size})"
+            )
+        return self
+
+
+class DecisionConfig(BaseModel):
+    """Human-review thresholds (master spec §15).
+
+    Two thresholds because the two configured classifiers expose different
+    quantities: a probability in [0, 1] from logistic regression, and an
+    unbounded decision margin from LinearSVC. One bar cannot serve both.
+    """
+
+    model_config = _STRICT
+
+    review_threshold: float = Field(ge=0.0, le=1.0)
+    review_margin_threshold: float = Field(ge=0.0)
+
+
+class SimilarityConfig(BaseModel):
+    """Nearest-neighbour retrieval over the run's fitted TF-IDF space."""
+
+    model_config = _STRICT
+
+    top_k: int = Field(gt=0)
+    min_score: float = Field(ge=0.0, le=1.0)
+
+
+class ExplanationConfig(BaseModel):
+    """How many per-term contributions an explanation returns."""
+
+    model_config = _STRICT
+
+    top_k_terms: int = Field(gt=0)
+
+
+class TrendsConfig(BaseModel):
+    """Per-year, per-class publication counts."""
+
+    model_config = _STRICT
+
+    max_series: int = Field(gt=0)
+    min_year: int = Field(gt=0)
+
+
+class DistributionConfig(BaseModel):
+    """Class-distribution bucketing for the donut chart."""
+
+    model_config = _STRICT
+
+    max_slices: int = Field(gt=0)
+    other_label: str = Field(min_length=1)
+
+
+class StorageConfig(BaseModel):
+    """Disk-usage meter: measured usage against an operator-set quota."""
+
+    model_config = _STRICT
+
+    quota_gb: float = Field(gt=0)
+    measured_dirs: list[Path] = Field(min_length=1)
+
+
+class ApiConfig(BaseModel):
+    """Root model for ``configs/api.yaml``."""
+
+    model_config = _STRICT
+
+    server: ServerConfig
+    cors: CorsConfig
+    security: SecurityConfig
+    runs: RunsConfig
+    pagination: PaginationConfig
+    decision: DecisionConfig
+    similarity: SimilarityConfig
+    explanation: ExplanationConfig
+    trends: TrendsConfig
+    distribution: DistributionConfig
+    storage: StorageConfig
+
+
+# ===========================================================================
 # Environment overlay
 # ===========================================================================
 class EnvSettings(BaseSettings):
@@ -440,6 +609,30 @@ class EnvSettings(BaseSettings):
     aris_log_level: str | None = None
     aris_data_dir: Path | None = None
 
+    # -- API deployment overrides -------------------------------------------
+    #: Deployment label, surfaced by ``/api/health`` and the dashboard footer.
+    #: Names the environment only; it must never gate behaviour, or the code path
+    #: that runs in production becomes the one least exercised in development.
+    aris_env: str = "development"
+    #: Shared secret for the API. A secret, so it lives only here — never in a
+    #: YAML file under version control, and never in a response body or a
+    #: results artifact (master spec §32).
+    aris_api_key: str | None = None
+    aris_api_host: str | None = None
+    aris_api_port: int | None = None
+    #: Comma-separated origin list, for a deployment whose front end is served
+    #: from somewhere other than the API itself.
+    aris_cors_origins: str | None = None
+    #: Pins the run the dashboard reads, overriding ``runs.default_run_id``.
+    aris_run_id: str | None = None
+
+    @property
+    def cors_origin_list(self) -> list[str] | None:
+        """Parse :attr:`aris_cors_origins`, or ``None`` when unset."""
+        if self.aris_cors_origins is None:
+            return None
+        return [origin.strip() for origin in self.aris_cors_origins.split(",") if origin.strip()]
+
 
 # ===========================================================================
 # Composite settings object
@@ -452,6 +645,7 @@ class Settings(BaseModel):
     app: AppConfig
     dataset: DatasetConfig
     model: ModelConfig
+    api: ApiConfig
     env: EnvSettings
     config_dir: Path
     project_root: Path = PROJECT_ROOT
@@ -488,6 +682,16 @@ class Settings(BaseModel):
         """Effective root log level."""
         return self.app.logging.level
 
+    @property
+    def results_dir(self) -> Path:
+        """Directory holding per-run output directories.
+
+        ``api.runs.results_dir`` wins when set; otherwise the single definition
+        in ``paths.results_dir`` applies, so the two cannot silently disagree.
+        """
+        override = self.api.runs.results_dir
+        return resolve_path(override) if override is not None else self.paths.resolved("results_dir")
+
 
 def _apply_env_overrides(app: AppConfig, env: EnvSettings) -> AppConfig:
     """Overlay environment variables onto the YAML-derived app config.
@@ -516,6 +720,28 @@ def _apply_env_overrides(app: AppConfig, env: EnvSettings) -> AppConfig:
     return app
 
 
+def _apply_api_env_overrides(api: ApiConfig, env: EnvSettings) -> ApiConfig:
+    """Overlay deployment-varying environment values onto the API config.
+
+    Only bind address, allowed origins, and the pinned run id are overridable:
+    those genuinely differ between a laptop and a deployment. Everything
+    behavioural stays in YAML so it is reviewable in version control.
+
+    The API key is deliberately absent — it is a secret, read straight from
+    :class:`EnvSettings` at request time and never copied into a config object
+    that gets serialised (master spec §32).
+    """
+    if env.aris_api_host is not None:
+        api.server.host = env.aris_api_host
+    if env.aris_api_port is not None:
+        api.server.port = env.aris_api_port
+    if (origins := env.cors_origin_list) is not None:
+        api.cors.allow_origins = origins
+    if env.aris_run_id is not None:
+        api.runs.default_run_id = env.aris_run_id
+    return api
+
+
 def load_settings(
     config_dir: Path | str = "configs",
     *,
@@ -524,8 +750,9 @@ def load_settings(
     """Load, overlay, and validate the full configuration.
 
     Args:
-        config_dir: Directory holding ``config.yaml``, ``dataset.yaml``, and
-            ``model.yaml``. Relative paths resolve against the project root.
+        config_dir: Directory holding ``config.yaml``, ``dataset.yaml``,
+            ``model.yaml``, and ``api.yaml``. Relative paths resolve against the
+            project root.
         overrides: Optional nested overrides applied to ``config.yaml`` data
             before validation, e.g. ``{"labels": {"mode": "multilabel"}}``.
             Used by CLI flags so a script never mutates config files on disk.
@@ -541,16 +768,20 @@ def load_settings(
     app_data = read_yaml(directory / "config.yaml")
     dataset_data = read_yaml(directory / "dataset.yaml")
     model_data = read_yaml(directory / "model.yaml")
+    api_data = read_yaml(directory / "api.yaml")
 
     if overrides:
         app_data = _deep_merge(app_data, overrides)
 
-    app = _apply_env_overrides(AppConfig(**app_data), env := EnvSettings())
+    env = EnvSettings()
+    app = _apply_env_overrides(AppConfig(**app_data), env)
+    api = _apply_api_env_overrides(ApiConfig(**api_data), env)
 
     return Settings(
         app=app,
         dataset=DatasetConfig(**dataset_data),
         model=ModelConfig(**model_data),
+        api=api,
         env=env,
         config_dir=directory,
     )
