@@ -8,10 +8,11 @@ wasteful; more importantly, the run store holds a fitted pipeline and a
 transformed corpus matrix, and rebuilding those per request would make the
 similarity endpoint unusable.
 
-:func:`get_active_run` converts a missing or broken run into an HTTP 503 with the
-command that would fix it. That is the failure mode a fresh clone hits — no run
-trained yet — and a stack trace in the browser console is a poor way to learn
-that ``scripts/train_baseline.py`` has not been run.
+:func:`get_active_run` lets a missing or broken run reach the handler in
+:mod:`src.api.app` that turns it into an HTTP 503 carrying the command that would
+fix it. That is the failure mode a fresh clone hits — no run trained yet — and a
+stack trace in the browser console is a poor way to learn that
+``scripts/train_baseline.py`` has not been run.
 
 The cache is process-wide, which means a test that changes configuration must
 call :func:`reset_caches`. Tests do; :mod:`src.api.app` calls it at startup.
@@ -19,25 +20,27 @@ call :func:`reset_caches`. Tests do; :mod:`src.api.app` calls it at startup.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Query, Request, status
+from fastapi import Depends, Query, Request
 
-from src.api.runstore import LoadedRun, RunStore, RunUnavailableError
+from src.api.runstore import LoadedRun, RunStore
 from src.api.security import check_api_key
 from src.config.settings import Settings, load_settings
 from src.utils.logging import get_logger
 
 __all__ = [
     "ActiveRun",
+    "PageWindow",
     "Pagination",
-    "PaginationParams",
     "SettingsDep",
     "StoreDep",
     "get_active_run",
     "get_settings",
     "get_store",
+    "pagination",
     "require_api_key",
     "reset_caches",
 ]
@@ -90,19 +93,14 @@ async def require_api_key(request: Request, settings: SettingsDep) -> None:
 def get_active_run(store: StoreDep) -> LoadedRun:
     """Return the run the dashboard should read.
 
-    Raises:
-        HTTPException: 503 when no usable run exists. 503 rather than 404: the
-            endpoint is correct and the client is not at fault — the server has
-            nothing loaded yet, and that is a temporary state a training run
-            resolves.
+    :class:`~src.api.runstore.RunUnavailableError` is allowed to propagate rather
+    than being converted here. :mod:`src.api.app` registers a handler for it that
+    answers 503 — the endpoint is correct and the client is not at fault; the
+    server simply has nothing loaded, which a training run resolves — and attaches
+    the command that fixes it. Building that response here as well would put the
+    same 503 in two places and let one of them drift.
     """
-    try:
-        return store.active()
-    except RunUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+    return store.active()
 
 
 ActiveRun = Annotated[LoadedRun, Depends(get_active_run)]

@@ -29,6 +29,7 @@ from typing import Any
 
 import joblib
 import numpy as np
+from sklearn.preprocessing import MultiLabelBinarizer
 
 from src.config.settings import Settings
 from src.evaluation.metrics import classification_report_dict, evaluate_predictions
@@ -146,18 +147,28 @@ def _score_split(
     *,
     classes: Sequence[str],
     settings: Settings,
-) -> tuple[dict[str, Any], list[str], np.ndarray | None, str]:
+    mlb: MultiLabelBinarizer | None = None,
+) -> tuple[dict[str, Any], list[Any], np.ndarray | None, str]:
     """Predict on one split and compute its metrics.
 
     Returns:
         ``(metrics, y_pred, scores, score_kind)``.
     """
     evaluation = settings.model.evaluation
-    y_pred = [str(label) for label in pipeline.predict(split.texts)]
+    multilabel = settings.labels.is_multilabel
+    raw_pred = pipeline.predict(split.texts)
+    if multilabel:
+        if mlb is None:
+            raise ValueError("Multi-label scoring requires a fitted MultiLabelBinarizer.")
+        y_pred: list[Any] = [list(labels) for labels in mlb.inverse_transform(raw_pred)]
+        y_true: Sequence[Any] = split.label_sets
+    else:
+        y_pred = [str(label) for label in raw_pred]
+        y_true = split.labels
     scores, score_kind = prediction_scores(pipeline, split.texts)
 
     metrics = evaluate_predictions(
-        split.labels,
+        y_true,
         y_pred,
         classes=classes,
         averages=evaluation.averages,
@@ -167,7 +178,7 @@ def _score_split(
         scores=scores,
         score_kind=score_kind,
         hamming_loss_requested=evaluation.hamming_loss,
-        multilabel=settings.labels.is_multilabel,
+        multilabel=multilabel,
     )
     logger.info(
         "eval | %s: %s=%.4f accuracy=%.4f (n=%d)",
@@ -193,7 +204,7 @@ def _write_plots(
     written: list[str] = []
     suffix = plots.figure_format.lstrip(".")
 
-    if plots.confusion_matrix:
+    if plots.confusion_matrix and not dataset.is_multilabel:
         for split, metrics in metrics_by_split.items():
             matrix = metrics["confusion_matrix"]
             normalized = matrix.get("normalized") is not None
@@ -216,7 +227,14 @@ def _write_plots(
 
     if plots.class_distribution:
         path = plot_class_distribution(
-            {name: split.class_counts for name, split in dataset.splits.items()},
+            {
+                name: (
+                    split.multilabel_class_counts
+                    if settings.labels.is_multilabel
+                    else split.class_counts
+                )
+                for name, split in dataset.splits.items()
+            },
             run_dir / f"{CLASS_DISTRIBUTION_STEM}.{suffix}",
             classes=dataset.classes or None,
             dpi=plots.dpi,
@@ -286,10 +304,20 @@ def train_baseline(
     pipeline = build_baseline(
         settings.model, model_name, seed=seed, multilabel=settings.labels.is_multilabel
     )
+    mlb: MultiLabelBinarizer | None = None
+    y_train: Sequence[Any]
+    if settings.labels.is_multilabel:
+        mlb = MultiLabelBinarizer(classes=classes)
+        y_train = mlb.fit_transform(train.label_sets)
+        # Persist the label names with the model so API consumers do not have to
+        # infer them from OneVsRestClassifier's indicator-column internals.
+        setattr(pipeline, "_aris_label_classes", list(mlb.classes_))
+    else:
+        y_train = train.labels
 
     # ---- the one and only fit call: training split, nothing else -----------
     fit_started = time.perf_counter()
-    pipeline.fit(train.texts, train.labels)
+    pipeline.fit(train.texts, y_train)
     fit_seconds = round(time.perf_counter() - fit_started, 3)
 
     vectorizer = pipeline.named_steps.get(VECTORIZER_STEP)
@@ -322,11 +350,16 @@ def train_baseline(
             continue
 
         metrics, y_pred, scores, score_kind = _score_split(
-            pipeline, split, classes=classes, settings=settings
+            pipeline, split, classes=classes, settings=settings, mlb=mlb
         )
         metrics_by_split[split_name] = metrics
         if split_name == primary_split:
-            report_json = classification_report_dict(split.labels, y_pred, classes=classes)
+            report_json = classification_report_dict(
+                split.label_sets if settings.labels.is_multilabel else split.labels,
+                y_pred,
+                classes=classes,
+                multilabel=settings.labels.is_multilabel,
+            )
 
         write_predictions(
             run_dir,
@@ -336,6 +369,7 @@ def train_baseline(
             classes=classes,
             scores=scores,
             score_kind=score_kind,
+            multilabel=settings.labels.is_multilabel,
         )
         artifacts.append(predictions_file_name(split_name))
 

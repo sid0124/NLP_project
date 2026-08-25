@@ -659,9 +659,12 @@ class RunStore:
         if not self.results_dir.is_dir():
             return
         for child in sorted(self.results_dir.iterdir()):
-            if child.is_dir() and is_valid_run_id(child.name):
-                if (child / RUN_MANIFEST_NAME).is_file():
-                    yield child
+            if (
+                child.is_dir()
+                and is_valid_run_id(child.name)
+                and (child / RUN_MANIFEST_NAME).is_file()
+            ):
+                yield child
 
     def summaries(self) -> list[RunSummary]:
         """Return every discoverable run, newest first."""

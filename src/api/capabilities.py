@@ -285,5 +285,15 @@ def caveats_for(run: LoadedRun | None) -> list[str]:
             "points as noise."
         )
 
-    caveats.extend([REVIEW_CAVEAT, SIMILARITY_CAVEAT, EXPLANATION_CAVEAT])
+    caveats.extend(
+        [
+            # What the confidence column actually holds. Without this the UI has
+            # to decide for itself whether a score is a probability or an
+            # unbounded margin, which would put the distinction in two places.
+            classification_caveat(run),
+            REVIEW_CAVEAT,
+            SIMILARITY_CAVEAT,
+            EXPLANATION_CAVEAT,
+        ]
+    )
     return caveats

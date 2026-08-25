@@ -370,9 +370,11 @@ class PaperSummary(BaseModel):
     split: str
     #: Ground-truth label from the source taxonomy.
     true_label: str | None = None
+    true_labels: list[str] = Field(default_factory=list)
     #: The run's prediction. ``None`` for training-split papers, which the model
     #: was fitted on and therefore has no honest score for.
     predicted_label: str | None = None
+    predicted_labels: list[str] = Field(default_factory=list)
     correct: bool | None = None
     confidence: float | None = None
     confidence_kind: str = "unavailable"
@@ -444,6 +446,7 @@ class ClassifyResult(BaseModel):
     model_config = _RESPONSE
 
     predicted_label: str
+    predicted_labels: list[str] = Field(default_factory=list)
     confidence: float | None = None
     confidence_kind: str = "unavailable"
     scores: list[LabelScore] = Field(default_factory=list)

@@ -24,10 +24,11 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import FileResponse, JSONResponse
 
 from src.api.deps import get_settings, get_store, require_api_key, reset_caches
@@ -110,20 +111,23 @@ def _install_error_handlers(app: FastAPI) -> None:
     shape means one error path in the frontend.
     """
 
-    @app.exception_handler(HTTPException)
-    async def _http_error(request: Request, exc: HTTPException) -> JSONResponse:
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_error(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        # Registered against Starlette's class, not FastAPI's subclass, so it also
+        # covers the router's own 404 and 405. Otherwise an unmatched path returns
+        # Starlette's bare ``{"detail": ...}`` and the client needs two error paths.
         return JSONResponse(
             status_code=exc.status_code,
             content={
                 "error": _slug(exc.status_code),
                 "detail": exc.detail if isinstance(exc.detail, str) else str(exc.detail),
             },
-            headers=exc.headers,
+            headers=getattr(exc, "headers", None),
         )
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(
-        request: Request, exc: RequestValidationError
+        _request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         return JSONResponse(
             status_code=422,
@@ -158,14 +162,23 @@ def _install_error_handlers(app: FastAPI) -> None:
 
 
 def _slug(status_code: int) -> str:
-    """Map an HTTP status to a stable machine-readable error key."""
+    """Map an HTTP status to a stable machine-readable error key.
+
+    Every status the API can produce deliberately is listed, including the two
+    that arrive by accident rather than by a raise: 405 from a method typo against
+    a real path, and 500 from ``require_api_key`` with no key configured. Falling
+    through to ``"error"`` for those would give the client a key it cannot branch
+    on for the two failures most likely to appear during setup.
+    """
     return {
         400: "bad_request",
         401: "unauthorized",
         403: "forbidden",
         404: "not_found",
+        405: "method_not_allowed",
         413: "payload_too_large",
         422: "validation_error",
+        500: "internal_error",
         501: "not_implemented",
         503: "run_unavailable",
     }.get(status_code, "error")

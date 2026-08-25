@@ -5,11 +5,10 @@ System. It is the **presentation target** captured from the project owner's
 mockup (recorded in [../docs/ui-target.md](../docs/ui-target.md)), built now so
 later phases produce data in the shape the UI needs.
 
-> **Every number on this screen is fictional.** No classifier has been trained
-> in this project yet. The values come from [js/data.js](js/data.js), whose
-> header says so in full. Nothing here is a measured result — do not screenshot
-> it as one. When the backend (spec §26) exists, `data.js` is the one file that
-> gets swapped for real endpoint calls; nothing else has to change.
+> **Every number on this screen is fictional.** The frontend now reads the API
+> directly, and the API is pinned to the synthetic demo run in
+> [`results/m1-tfidf_logreg`](../results/m1-tfidf_logreg/). Nothing here is a
+> measured result — do not screenshot it as one.
 
 ## Running it
 
@@ -30,8 +29,8 @@ configuration that runs exactly this command.)
 |---|---|
 | Layout, theme, components, charts, interactions | **Real** — this is the shipping frontend code |
 | Colour system + accessibility validation | **Real** — see below |
-| Every displayed value (papers, %, counts, chat answers) | **Mock** — hard-coded in `js/data.js`, labelled fictional |
-| Backend / API calls | **Absent** — no network calls are made; `data.js` stands in for spec §26 |
+| Every displayed value (papers, %, counts, chat answers) | **Fictional** — served by the API from the synthetic demo run |
+| Backend / API calls | **Real** — `js/app.js` reads `/api/*` directly |
 
 ## Files
 
@@ -40,7 +39,7 @@ configuration that runs exactly this command.)
 | `index.html` | Structure only — every value is injected by JS into an empty mount |
 | `css/tokens.css` | Single source of every colour / space / radius / type step. Two themes. |
 | `css/app.css` | Layout and component styling; consumes tokens, declares no raw colours |
-| `js/data.js` | **All mock data.** The honesty banner and the one file to replace with real endpoints |
+| `js/api.js` | Fetch wrapper and endpoint helpers for the live backend |
 | `js/domains.js` | Maps each domain to a *reserved* series slot (see "Colour" below) |
 | `js/icons.js` | Inline SVG icon set (no icon font, no sprite request) |
 | `js/charts.js` | Hand-built SVG donut + multi-line trends. No charting library. |
@@ -127,5 +126,6 @@ which is exactly what spec §20 forbids; the mock conversation already includes 
 
 This frontend is **not** part of Milestone 1 (§62 explicitly excludes the
 frontend from M1). It was built ahead of its phase at the project owner's
-request. It has no dependency on the Python pipeline and makes no network calls,
-so it neither blocks nor is blocked by the baseline work.
+request. It is now connected to the Python API, but the API is still serving the
+synthetic demo run, so the whole experience remains fictional while the wiring is
+real.

@@ -9,23 +9,53 @@
    two page loads. Because the slot is pinned to the name, a domain keeps its
    colour across the donut, the trends chart, and every table chip.
 
-   Only six domains are coloured. That is not an oversight: six is the number
-   of adjacent slots validated against both surfaces. Anything past the
-   registry folds into a neutral treatment rather than getting an invented
-   hue, which is the same rule as folding a 9th series into "Other".
+   The names come from the server, not from this file: `registerDomains` is
+   called once at boot with `run.classes` from GET /api/meta. That list is the
+   run's own class order, which is alphabetical and therefore stable across
+   reloads and independent of how many papers each class holds -- the two
+   properties the assignment needs. Hard-coding names here instead would break
+   the moment the corpus was rebuilt at a different taxonomy level.
+
+   Only six domains are coloured. That is not an oversight: six is the number of
+   adjacent slots validated against both surfaces. Anything past the registry --
+   including the donut's "Others" overflow bucket, which is never a class name
+   and so is never registered -- falls back to a neutral treatment rather than
+   getting an invented hue. Same rule as folding a 9th series into "Other".
    ========================================================================== */
 
-/** Domain name -> CSS custom property holding its hue. */
-const DOMAIN_SLOTS = {
-  "Machine Learning": "--series-1",
-  "Computer Vision": "--series-2",
-  NLP: "--series-3",
-  Robotics: "--series-4",
-  Bioinformatics: "--series-5",
-  "Deep Learning": "--series-6",
-};
+/** Validated categorical order. Assigned in sequence, never cycled. */
+const SLOTS = [
+  "--series-1",
+  "--series-2",
+  "--series-3",
+  "--series-4",
+  "--series-5",
+  "--series-6",
+];
 
 const NEUTRAL_SLOT = "--series-other";
+
+/** Domain name -> CSS custom property holding its hue. */
+let registry = new Map();
+
+/**
+ * Pin each domain to a categorical slot.
+ *
+ * Replaces the registry outright rather than extending it, so switching runs
+ * cannot leave a stale name holding a slot the new run needs.
+ *
+ * @param {string[]} labels Class names in the run's own stable order.
+ * @returns {number} How many received a reserved hue; the rest go neutral.
+ */
+export function registerDomains(labels) {
+  registry = new Map();
+  for (const label of labels) {
+    if (registry.size >= SLOTS.length) break;
+    if (typeof label !== "string" || !label || registry.has(label)) continue;
+    registry.set(label, SLOTS[registry.size]);
+  }
+  return registry.size;
+}
 
 /**
  * Resolve a domain to a live CSS colour value.
@@ -37,8 +67,7 @@ const NEUTRAL_SLOT = "--series-other";
  * @returns {string} A CSS colour.
  */
 export function domainColor(domain) {
-  const slot = DOMAIN_SLOTS[domain] ?? NEUTRAL_SLOT;
-  return readToken(slot);
+  return readToken(registry.get(domain) ?? NEUTRAL_SLOT);
 }
 
 /**
@@ -58,5 +87,5 @@ export function readToken(name) {
  * @returns {boolean}
  */
 export function isRegisteredDomain(domain) {
-  return domain in DOMAIN_SLOTS;
+  return registry.has(domain);
 }

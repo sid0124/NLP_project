@@ -19,6 +19,7 @@ import pytest
 from sklearn.base import BaseEstimator
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
@@ -160,14 +161,12 @@ def test_unknown_baseline_name_lists_available(settings: Settings) -> None:
         build_baseline(settings.model, "no_such_baseline", seed=settings.seed)
 
 
-def test_multilabel_refuses_rather_than_pretending(settings: Settings) -> None:
-    """Multi-label mode is refused rather than silently approximated.
-
-    A pipeline trained on primary labels alone would otherwise report multi-class
-    numbers under a multi-label heading.
-    """
-    with pytest.raises(NotImplementedError, match="multiclass"):
-        build_baseline(settings.model, "tfidf_logreg", seed=settings.seed, multilabel=True)
+def test_multilabel_wraps_the_configured_classifier(settings: Settings) -> None:
+    """Multi-label mode uses one independent classifier per label."""
+    pipeline = build_baseline(settings.model, "tfidf_logreg", seed=settings.seed, multilabel=True)
+    classifier = pipeline.named_steps[CLASSIFIER_STEP]
+    assert isinstance(classifier, OneVsRestClassifier)
+    assert isinstance(classifier.estimator, LogisticRegression)
 
 
 # ---------------------------------------------------------------------------

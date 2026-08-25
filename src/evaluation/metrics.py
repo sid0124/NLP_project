@@ -32,6 +32,8 @@ from sklearn.metrics import (
     balanced_accuracy_score,
     classification_report,
     confusion_matrix,
+    hamming_loss,
+    multilabel_confusion_matrix,
     precision_recall_fscore_support,
 )
 
@@ -42,6 +44,7 @@ __all__ = [
     "confidence_summary",
     "confusion_matrix_data",
     "evaluate_predictions",
+    "multilabel_confusion_matrix_data",
     "parse_primary_metric",
     "primary_metric_value",
     "required_averages",
@@ -134,6 +137,29 @@ def _averaged_metrics(
     return result
 
 
+def _multilabel_matrix(values: Sequence[Any], *, classes: Sequence[str]) -> np.ndarray:
+    """Convert label sets or indicator rows into an ``(n, n_classes)`` matrix."""
+    if isinstance(values, np.ndarray):
+        matrix = np.asarray(values, dtype=int)
+        if matrix.ndim != 2 or matrix.shape[1] != len(classes):
+            raise ValueError(
+                f"multi-label indicator matrix has shape {matrix.shape}, "
+                f"expected (n_samples, {len(classes)})"
+            )
+        return matrix
+
+    class_index = {label: index for index, label in enumerate(classes)}
+    rows: list[list[int]] = []
+    for item in values:
+        row = [0] * len(classes)
+        labels = [item] if isinstance(item, str) else list(item)
+        for label in labels:
+            if label in class_index:
+                row[class_index[label]] = 1
+        rows.append(row)
+    return np.asarray(rows, dtype=int)
+
+
 def _per_class_metrics(
     y_true: Sequence[str], y_pred: Sequence[str], *, classes: Sequence[str]
 ) -> dict[str, dict[str, float]]:
@@ -142,6 +168,50 @@ def _per_class_metrics(
         y_true,
         y_pred,
         labels=list(classes),
+        average=None,
+        zero_division=0,
+    )
+    return {
+        label: {
+            "precision": float(precision[index]),
+            "recall": float(recall[index]),
+            "f1": float(f1[index]),
+            "support": int(support[index]),
+        }
+        for index, label in enumerate(classes)
+    }
+
+
+def _multilabel_averaged_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    *,
+    averages: Sequence[str],
+) -> dict[str, dict[str, float]]:
+    """Compute multi-label precision/recall/F1 under each averaging strategy."""
+    result: dict[str, dict[str, float]] = {}
+    for average in averages:
+        precision, recall, f1, _ = precision_recall_fscore_support(
+            y_true,
+            y_pred,
+            average=average,
+            zero_division=0,
+        )
+        result[average] = {
+            "precision": float(precision),
+            "recall": float(recall),
+            "f1": float(f1),
+        }
+    return result
+
+
+def _multilabel_per_class_metrics(
+    y_true: np.ndarray, y_pred: np.ndarray, *, classes: Sequence[str]
+) -> dict[str, dict[str, float]]:
+    """Compute one-vs-rest precision/recall/F1/support for every label."""
+    precision, recall, f1, support = precision_recall_fscore_support(
+        y_true,
+        y_pred,
         average=None,
         zero_division=0,
     )
@@ -196,8 +266,35 @@ def confusion_matrix_data(
     }
 
 
+def multilabel_confusion_matrix_data(
+    y_true: np.ndarray, y_pred: np.ndarray, *, classes: Sequence[str]
+) -> dict[str, Any]:
+    """Build a per-label one-vs-rest confusion matrix payload."""
+    matrices = multilabel_confusion_matrix(y_true, y_pred)
+    per_label = {}
+    for index, label in enumerate(classes):
+        tn, fp, fn, tp = matrices[index].ravel()
+        per_label[label] = {
+            "true_negative": int(tn),
+            "false_positive": int(fp),
+            "false_negative": int(fn),
+            "true_positive": int(tp),
+        }
+    return {
+        "labels": list(classes),
+        "counts": None,
+        "normalized": None,
+        "per_label": per_label,
+        "note": "Multi-label evaluation uses one-vs-rest confusion counts per label.",
+    }
+
+
 def classification_report_dict(
-    y_true: Sequence[str], y_pred: Sequence[str], *, classes: Sequence[str]
+    y_true: Sequence[Any],
+    y_pred: Sequence[Any],
+    *,
+    classes: Sequence[str],
+    multilabel: bool = False,
 ) -> dict[str, Any]:
     """Return scikit-learn's classification report as a nested mapping.
 
@@ -205,13 +302,22 @@ def classification_report_dict(
     compared against any other scikit-learn project without re-deriving the
     layout.
     """
-    report = classification_report(
-        y_true,
-        y_pred,
-        labels=list(classes),
-        output_dict=True,
-        zero_division=0,
-    )
+    if multilabel:
+        report = classification_report(
+            _multilabel_matrix(y_true, classes=classes),
+            _multilabel_matrix(y_pred, classes=classes),
+            target_names=list(classes),
+            output_dict=True,
+            zero_division=0,
+        )
+    else:
+        report = classification_report(
+            y_true,
+            y_pred,
+            labels=list(classes),
+            output_dict=True,
+            zero_division=0,
+        )
     # numpy scalars would serialise only via a custom encoder; flatten here so the
     # object is plain-JSON regardless of who writes it.
     return {
@@ -320,8 +426,8 @@ def primary_metric_value(metrics: dict[str, Any], primary_metric: str) -> float:
 
 
 def evaluate_predictions(
-    y_true: Sequence[str],
-    y_pred: Sequence[str],
+    y_true: Sequence[Any],
+    y_pred: Sequence[Any],
     *,
     classes: Sequence[str],
     averages: Sequence[str] = AVERAGE_NAMES,
@@ -347,9 +453,7 @@ def evaluate_predictions(
         scores: Optional per-class scores for confidence reporting.
         score_kind: What ``scores`` contains.
         hamming_loss_requested: Whether ``evaluation.hamming_loss`` is enabled.
-        multilabel: Whether the run is multi-label. Only ``False`` is supported;
-            the flag exists so Hamming loss can be explained rather than silently
-            dropped.
+        multilabel: Whether the run is multi-label.
 
     Returns:
         A JSON-serialisable mapping with ``n_samples``, global metrics,
@@ -368,6 +472,52 @@ def evaluate_predictions(
         raise ValueError("An empty class vocabulary cannot be evaluated against.")
 
     wanted = required_averages(averages, primary_metric)
+
+    if multilabel:
+        true_matrix = _multilabel_matrix(y_true, classes=classes)
+        pred_matrix = _multilabel_matrix(y_pred, classes=classes)
+        averaged = _multilabel_averaged_metrics(true_matrix, pred_matrix, averages=wanted)
+        metrics: dict[str, Any] = {
+            "n_samples": len(y_true),
+            "n_classes": len(classes),
+            # In multi-label mode sklearn's accuracy is exact-set match.
+            "accuracy": float(accuracy_score(true_matrix, pred_matrix)),
+            "balanced_accuracy": averaged.get("macro", {}).get("recall", 0.0),
+            "averages": averaged,
+            "per_class": (
+                _multilabel_per_class_metrics(true_matrix, pred_matrix, classes=classes)
+                if per_class
+                else {}
+            ),
+            "confusion_matrix": multilabel_confusion_matrix_data(
+                true_matrix, pred_matrix, classes=classes
+            ),
+            "confidence": confidence_summary(
+                scores,
+                score_kind,
+                correct=[
+                    bool(np.array_equal(t, p))
+                    for t, p in zip(true_matrix, pred_matrix, strict=True)
+                ],
+            ),
+        }
+        metrics["hamming_loss"] = {
+            "requested": hamming_loss_requested,
+            "value": float(hamming_loss(true_matrix, pred_matrix))
+            if hamming_loss_requested
+            else None,
+            "note": (
+                "Fraction of label decisions that are wrong across all samples "
+                "and classes."
+                if hamming_loss_requested
+                else "Not requested."
+            ),
+        }
+        metrics["primary_metric"] = {
+            "name": primary_metric,
+            "value": primary_metric_value(metrics, primary_metric),
+        }
+        return metrics
 
     metrics: dict[str, Any] = {
         "n_samples": len(y_true),

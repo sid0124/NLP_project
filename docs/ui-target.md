@@ -8,11 +8,12 @@ and so earlier phases produce the data it needs.
 
 The dashboard shell described below **now exists** under [../frontend/](../frontend/),
 built ahead of its phase at the project owner's explicit request. It is static
-and framework-free, makes no network calls, and renders entirely from
-hard-coded mock data in `frontend/js/data.js`. It is therefore **not** part of
-Milestone 1 (§62 excludes the frontend) and neither blocks nor is blocked by the
-baseline work. See [../frontend/README.md](../frontend/README.md) for what is
-real vs. mock, how to run it, and the palette-validation commands.
+and framework-free, but it is now wired to the API and reads the synthetic demo
+run pinned in [../configs/api.yaml](../configs/api.yaml). It is therefore
+**not** part of Milestone 1 (§62 excludes the frontend) and neither blocks nor
+is blocked by the baseline work. See [../frontend/README.md](../frontend/README.md)
+for what is real vs. fictional, how to run it, and the palette-validation
+commands.
 
 Two deviations from the mockup, both deliberate:
 

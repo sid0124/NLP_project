@@ -139,11 +139,12 @@ def write_predictions(
     run_dir: Path,
     split: str,
     records: Sequence[DatasetRecord],
-    y_pred: Sequence[str],
+    y_pred: Sequence[Any],
     *,
     classes: Sequence[str],
     scores: np.ndarray | None = None,
     score_kind: str = "unavailable",
+    multilabel: bool = False,
 ) -> Path:
     """Write per-paper predictions so individual errors can be inspected.
 
@@ -154,7 +155,7 @@ def write_predictions(
         run_dir: Destination run directory.
         split: Split name, used in the file name.
         records: Records in prediction order.
-        y_pred: Predicted labels, aligned with ``records``.
+        y_pred: Predicted labels or label sets, aligned with ``records``.
         classes: Class order matching the columns of ``scores``.
         scores: Optional ``(n_samples, n_classes)`` score matrix.
         score_kind: What ``scores`` holds — ``"probability"`` or ``"decision"``.
@@ -170,13 +171,19 @@ def write_predictions(
 
     class_index = {label: index for index, label in enumerate(classes)}
 
-    def _row(position: int, record: DatasetRecord, predicted: str) -> dict[str, Any]:
+    def _row(position: int, record: DatasetRecord, predicted: Any) -> dict[str, Any]:
+        predicted_labels = [str(label) for label in predicted] if multilabel else [str(predicted)]
+        exact_match = set(record.labels) == set(predicted_labels) if multilabel else (
+            record.label == predicted
+        )
         payload: dict[str, Any] = {
             "paper_id": record.paper_id,
             "title": record.title,
             "true_label": record.label,
-            "predicted_label": predicted,
-            "correct": record.label == predicted,
+            "predicted_label": predicted_labels[0] if predicted_labels else None,
+            "true_labels": list(record.labels),
+            "predicted_labels": predicted_labels if multilabel else [],
+            "correct": exact_match,
             "confidence_kind": score_kind,
         }
         if scores is None:
@@ -248,7 +255,23 @@ def _top_confusions(metrics: dict[str, Any]) -> list[str]:
     """List the largest off-diagonal confusion cells."""
     matrix = metrics.get("confusion_matrix") or {}
     labels = matrix.get("labels") or []
-    counts = matrix.get("counts") or []
+    counts = matrix.get("counts")
+    if counts is None:
+        per_label = matrix.get("per_label") or {}
+        if not per_label:
+            return ["No confusion matrix is available for this split."]
+        rows = sorted(
+            (
+                label,
+                values.get("false_positive", 0),
+                values.get("false_negative", 0),
+            )
+            for label, values in per_label.items()
+        )
+        lines = ["| Label | False positives | False negatives |", "| --- | --- | --- |"]
+        lines += [f"| {label} | {fp} | {fn} |" for label, fp, fn in rows]
+        return lines
+    counts = counts or []
     offenders = [
         (counts[row][column], labels[row], labels[column])
         for row in range(len(labels))

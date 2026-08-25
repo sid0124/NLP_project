@@ -690,7 +690,9 @@ class Settings(BaseModel):
         in ``paths.results_dir`` applies, so the two cannot silently disagree.
         """
         override = self.api.runs.results_dir
-        return resolve_path(override) if override is not None else self.paths.resolved("results_dir")
+        if override is not None:
+            return resolve_path(override)
+        return self.paths.resolved("results_dir")
 
 
 def _apply_env_overrides(app: AppConfig, env: EnvSettings) -> AppConfig:

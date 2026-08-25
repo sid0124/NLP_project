@@ -39,6 +39,7 @@ from src.evaluation.report import (
 from src.training.dataset import ProcessedDataset
 from src.training.train_baseline import RunExistsError, TrainingResult, train_baseline
 from src.utils.io import PROJECT_ROOT, read_json
+from tests.fixtures.synthetic_corpus import write_synthetic_dataset
 
 MODEL_NAMES = ["tfidf_logreg", "tfidf_svm"]
 
@@ -320,21 +321,37 @@ def test_two_runs_coexist_under_distinct_ids(
 # ---------------------------------------------------------------------------
 # Refusals
 # ---------------------------------------------------------------------------
-def test_multilabel_mode_refuses_rather_than_reporting_multiclass_numbers(
-    settings: Settings, synthetic_dataset_dir: Path, results_dir: Path
+def test_multilabel_mode_trains_and_reports_multilabel_metrics(
+    settings: Settings, tmp_path: Path, results_dir: Path
 ) -> None:
-    """Multi-label training is not implemented, and must not appear to be."""
+    """Multi-label training uses label sets, not primary-label fallback."""
     labels = settings.labels.model_copy(update={"mode": "multilabel"})
     multilabel = settings.model_copy(
         update={"app": settings.app.model_copy(update={"labels": labels})}
     )
-    with pytest.raises(NotImplementedError, match="multiclass"):
-        train_baseline(
-            multilabel,
-            "tfidf_logreg",
-            data_dir=synthetic_dataset_dir,
-            results_dir=results_dir,
-        )
+    data_dir = tmp_path / "multilabel"
+    write_synthetic_dataset(data_dir, multilabel, min_class_count=5)
+
+    result = train_baseline(
+        multilabel,
+        "tfidf_logreg",
+        data_dir=data_dir,
+        results_dir=results_dir,
+        run_id="multilabel-itest",
+    )
+
+    metrics = result.metrics[result.primary_split]
+    assert result.manifest["labels"]["mode"] == "multilabel"
+    assert metrics["hamming_loss"]["value"] is not None
+    assert metrics["confusion_matrix"]["per_label"]
+
+    prediction = json.loads(
+        (result.run_dir / predictions_file_name(result.primary_split))
+        .read_text(encoding="utf-8")
+        .splitlines()[0]
+    )
+    assert prediction["true_labels"]
+    assert prediction["predicted_labels"]
 
 
 def test_unknown_model_fails_before_touching_the_dataset(

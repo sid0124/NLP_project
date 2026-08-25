@@ -43,9 +43,11 @@ def test_loads_every_split_written_by_the_build(processed_dataset: ProcessedData
 def test_parallel_arrays_stay_aligned(processed_dataset: ProcessedDataset) -> None:
     for split in processed_dataset.splits.values():
         assert len(split.texts) == len(split.labels) == len(split.records) == len(split)
+        assert len(split.label_sets) == len(split.records)
         for index, record in enumerate(split.records):
             assert split.texts[index] == record.text
             assert split.labels[index] == record.label
+            assert split.label_sets[index] == record.labels
 
 
 def test_classes_come_from_the_vocabulary_file(

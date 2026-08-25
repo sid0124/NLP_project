@@ -272,6 +272,25 @@ def test_hamming_loss_is_acknowledged_not_fabricated() -> None:
     assert "multi-label metric" in metrics["hamming_loss"]["note"]
 
 
+def test_multilabel_metrics_compute_hamming_loss_and_exact_match_accuracy() -> None:
+    y_true = [["ai", "vision"], ["networks"], ["vision"]]
+    y_pred = [["ai"], ["networks"], ["ai", "vision"]]
+    metrics = evaluate_predictions(
+        y_true,
+        y_pred,
+        classes=CLASSES,
+        hamming_loss_requested=True,
+        multilabel=True,
+    )
+
+    assert metrics["accuracy"] == pytest.approx(1 / 3)
+    assert metrics["hamming_loss"]["value"] == pytest.approx(2 / 9)
+    assert metrics["averages"]["macro"]["f1"] > 0.0
+    assert metrics["per_class"]["vision"]["support"] == 2
+    assert metrics["confusion_matrix"]["counts"] is None
+    assert metrics["confusion_matrix"]["per_label"]["ai"]["false_positive"] == 1
+
+
 def test_payload_is_json_native() -> None:
     """No numpy scalars: the writer must not need a custom encoder."""
     import json

@@ -544,18 +544,14 @@ svg {
   line-height: 1.25;
 }
 
-.stat__delta {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
+/* The tile's qualifier: what the number counted, or which split it came from.
+   Descriptive rather than a trend delta -- one run has no previous period to
+   compare against, so an arrow and a percentage would be invented. */
+.stat__note {
+  margin-top: var(--sp-1);
   font-size: var(--fs-sm);
   color: var(--text-secondary);
-}
-
-/* Direction is carried by an arrow glyph as well as colour, so the delta
-   never depends on hue alone. */
-.stat__delta--up {
-  color: var(--status-good-ink);
+  line-height: 1.35;
 }
 
 .stat__glyph {
@@ -820,14 +816,41 @@ svg {
 }
 
 .bar-row__label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  /* A block, not a flex container: `text-overflow` has no effect on a flex
+     item, so a flex label clipped long names mid-word with no ellipsis. */
+  display: block;
+  min-width: 0;
   font-size: var(--fs-base);
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Label on its own line, above the bar. For categorical names too long to
+   ellipsize usefully -- "Computer Networks and Communications" has no prefix
+   that identifies it. */
+.bar-row--stacked {
+  display: block;
+  padding: var(--sp-2) 0;
+}
+
+.bar-row__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: 6px;
+}
+
+.bar-row--stacked .bar-row__label {
+  white-space: normal;
+  color: var(--text-primary);
+}
+
+.bar-row--stacked .bar-row__value {
+  flex-shrink: 0;
+  text-align: right;
 }
 
 .bar-row__value {
@@ -1272,6 +1295,408 @@ svg {
   font-size: var(--fs-sm);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/* A signed value needs a zero baseline, so this variant positions its fill
+   against a centre axis instead of growing from the left edge. The track is a
+   rounded rectangle rather than a pill: a pill radius would clip the data-end
+   of a full-length bar against `overflow: hidden` on .meter. */
+.meter--diverging {
+  position: relative;
+  height: 8px;
+  border-radius: var(--r-sm);
+}
+
+.meter--diverging .meter__fill {
+  position: absolute;
+  top: 0;
+  transition: none;
+}
+
+/* The zero rule. 1px and recessive -- it is a reference line, not a mark -- but
+   on the border token rather than the axis token, which disappears against the
+   track fill at this size. */
+.meter__axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--border-strong);
+}
+
+/* ==========================================================================
+   Provenance strip
+   ==========================================================================
+   Which run produced everything below, and the caveats that bound it. Set at
+   small type on the page background rather than in a card: it is a byline for
+   the whole view, not another panel competing with the data.
+   ========================================================================== */
+
+.run-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-5);
+}
+
+.run-strip__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+}
+
+.run-strip__fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.run-strip__key {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--bg-raised);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* A caveat that changes how every number should be read. Carries an icon as
+   well as the warning hue, so it survives a colourblind or greyscale reading. */
+.tag--warn {
+  border-color: var(--status-warning);
+  color: var(--status-warning-ink);
+}
+
+.caveat-list {
+  margin: 0;
+  padding-left: var(--sp-4);
+  display: grid;
+  gap: var(--sp-2);
+}
+
+/* ==========================================================================
+   Absent states
+   ==========================================================================
+   Three distinct kinds of nothing, deliberately styled apart:
+
+   .unavailable -- the feature is not built. Neutral, explained, permanent.
+   .alert       -- a request failed. Warning-hued, actionable, transient.
+   .empty       -- it worked and there is genuinely nothing. Quietest of the three.
+
+   Collapsing them would be the actual failure: "not built yet" and "the server
+   is down" call for completely different responses from a reader.
+   ========================================================================== */
+
+.unavailable {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--bg-inset);
+}
+
+.unavailable__glyph {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+.unavailable__title {
+  margin: 0 0 2px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.unavailable__reason,
+.unavailable__requires {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.unavailable__requires {
+  margin-top: var(--sp-2);
+  color: var(--text-muted);
+}
+
+.alert {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--status-warning);
+  border-radius: var(--r-md);
+  background: var(--bg-inset);
+}
+
+.alert__glyph {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--status-warning-ink);
+}
+
+.alert__title {
+  margin: 0 0 2px;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.alert__detail {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* The recovery command, set as code so it can be copied without ambiguity. */
+.alert__hint {
+  margin: var(--sp-2) 0 0;
+}
+
+.alert__hint code {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  background: var(--bg-page);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+.empty {
+  margin: 0;
+  padding: var(--sp-4);
+  text-align: center;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* Loading placeholder. Sized to the content it stands in for so the panel does
+   not jump when data arrives. The shimmer is suppressed by the reduced-motion
+   query at the end of this file. */
+.skeleton {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+}
+
+.skeleton__line {
+  height: 12px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(90deg, var(--bg-inset), var(--track), var(--bg-inset));
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+.skeleton__line:nth-child(even) {
+  width: 72%;
+}
+
+@keyframes skeleton-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+/* ==========================================================================
+   Filters and paging
+   ========================================================================== */
+
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--sp-4);
+  padding: 0 var(--sp-5) var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.field__label {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.field__control {
+  padding: 6px var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-raised);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+.field__control:focus-visible,
+.checkbox input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding-bottom: 6px;
+}
+
+.checkbox input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.pager__status {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pager__controls {
+  display: inline-flex;
+  gap: var(--sp-2);
+}
+
+.pager__controls button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ==========================================================================
+   Prediction cells
+   ========================================================================== */
+
+/* A margin has no upper bound, so it gets a number and a unit label instead of
+   the proportional bar a probability gets. The unit is what stops the two from
+   being read as the same quantity. */
+.conf-cell__unit {
+  margin-left: 5px;
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.conf-cell__none {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  border-bottom: 1px dotted var(--border-strong);
+  cursor: help;
+}
+
+/* A label with no reserved hue: outlined rather than given an invented colour. */
+.chip--ghost {
+  color: var(--text-muted);
+  border-style: dashed;
+}
+
+.mismatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  color: var(--status-warning-ink);
+  white-space: nowrap;
+}
+
+.verdict-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--sp-2);
+}
+
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-sm);
+}
+
+.verdict--good {
+  color: var(--status-good-ink);
+}
+
+.verdict--bad {
+  color: var(--status-warning-ink);
+}
+
+/* The row whose analysis is open on the right. Marked with a border on the
+   leading edge rather than a fill, so it does not compete with the chips. */
+.table tbody tr[aria-selected] {
+  background: var(--bg-inset);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* ==========================================================================
+   Toast
+   ==========================================================================
+   Says why a control did nothing. Bottom-right, out of the way of the sidebar
+   and the composer, and it removes itself.
+   ========================================================================== */
+
+.toast {
+  position: fixed;
+  right: var(--sp-5);
+  bottom: var(--sp-5);
+  max-width: 340px;
+  animation: toast-in 0.16s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ==========================================================================

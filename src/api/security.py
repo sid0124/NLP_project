@@ -75,6 +75,15 @@ SECURITY_HEADERS: dict[str, str] = {
 #: Characters permitted in a sanitised filename.
 _FILENAME_SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
+#: Names Windows resolves as devices regardless of extension or directory, so
+#: opening "CON.pdf" for writing writes to the console rather than to a file. The
+#: allowlist above cannot catch these — every character in them is safe.
+_WINDOWS_RESERVED = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{index}" for index in range(1, 10)}
+    | {f"LPT{index}" for index in range(1, 10)}
+)
+
 #: Longest filename produced by :func:`safe_filename`, leaving room for a
 #: directory prefix inside common path length limits.
 _FILENAME_MAX = 96
@@ -214,7 +223,9 @@ def safe_filename(raw: str, *, fallback: str = "upload") -> str:
     Defence order matters. Unicode is normalised first so that a decomposed or
     homoglyph form cannot smuggle a separator past the character filter; then
     every path separator is dropped by taking only the final segment of both
-    conventions; then anything outside a conservative allowlist is collapsed.
+    conventions; then anything outside a conservative allowlist is collapsed; and
+    last, a Windows device name is defused, because that is the one hazard whose
+    characters are all individually safe.
 
     Args:
         raw: The client-supplied name.
@@ -222,7 +233,8 @@ def safe_filename(raw: str, *, fallback: str = "upload") -> str:
 
     Returns:
         A basename containing only ASCII letters, digits, ``.``, ``_``, and
-        ``-``, never empty, never starting with a dot, and length-capped.
+        ``-``, never empty, never starting with a dot, never a Windows device
+        name, and length-capped.
     """
     normalised = unicodedata.normalize("NFKC", raw)
     # Strip control and format characters, including the bidi overrides used to
@@ -236,6 +248,13 @@ def safe_filename(raw: str, *, fallback: str = "upload") -> str:
     cleaned = _FILENAME_SAFE.sub("_", basename).strip("._-")
     if not cleaned:
         return fallback
+
+    stem, dot, suffix = cleaned.partition(".")
+    if stem.upper() in _WINDOWS_RESERVED:
+        # Every character here is already in the allowlist, so this is the one
+        # hazard the filter cannot see. An appended underscore makes the name
+        # ordinary while keeping it recognisable to whoever uploaded it.
+        cleaned = f"{stem}_{dot}{suffix}"
 
     # Preserve the extension when truncating: a length cap that eats the suffix
     # turns a validated ".pdf" into an extensionless file.

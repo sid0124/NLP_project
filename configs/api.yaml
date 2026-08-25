@@ -50,9 +50,9 @@ runs:
   # Directory holding `<run_id>/` subdirectories. Null falls back to
   # paths.results_dir in config.yaml, so the layout is defined in one place.
   results_dir: null
-  # Which run the dashboard shows. Null selects the most recently finished run,
-  # so a fresh `train_baseline.py` is picked up without editing configuration.
-  default_run_id: null
+  # Pin the dashboard to the synthetic demo run so the frontend always lands on
+  # fictional content by default. Set back to null to follow the newest run.
+  default_run_id: m1-tfidf_logreg
 
 pagination:
   default_page_size: 10

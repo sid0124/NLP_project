@@ -96,6 +96,12 @@
             <p class="greeting__sub">Here's what's happening with your research.</p>
           </div>
 
+          <!-- Provenance. Every number below belongs to one training run over one
+               corpus; this strip names both, plus the standing caveats that bound
+               how all of them should be read. Without it the page would read as
+               though these were properties of the system. -->
+          <section class="run-strip" id="run-strip" aria-label="Active run and caveats"></section>
+
           <!-- Stat tiles -->
           <section class="stat-row" id="stat-row" aria-label="Summary statistics"></section>
 
@@ -107,14 +113,33 @@
                 <div class="card__head">
                   <h2 class="card__title" id="recent-title">Recent Paper Analysis</h2>
                 </div>
+                <!-- Filters in one row above the data they filter, so the control
+                     and its effect are read together. All three are applied by the
+                     API, not by slicing an already-fetched page. -->
+                <div class="filter-row">
+                  <label class="field">
+                    <span class="field__label">Split</span>
+                    <select class="field__control" id="papers-split">
+                      <option value="held_out" selected>Held out (val + test)</option>
+                      <option value="val">Validation</option>
+                      <option value="test">Test</option>
+                      <option value="train">Train</option>
+                      <option value="all">All splits</option>
+                    </select>
+                  </label>
+                  <label class="checkbox">
+                    <input type="checkbox" id="papers-review" />
+                    <span>Needs review only</span>
+                  </label>
+                </div>
                 <div class="card__body">
                   <div class="table-wrap">
                     <table class="table">
                       <thead>
                         <tr>
                           <th scope="col">Paper</th>
-                          <th scope="col">Predicted Domains</th>
-                          <th scope="col">Confidence</th>
+                          <th scope="col">Predicted Domain</th>
+                          <th scope="col" id="conf-heading">Confidence</th>
                           <th scope="col"><span class="sr-only">Actions</span></th>
                         </tr>
                       </thead>
@@ -122,9 +147,7 @@
                     </table>
                   </div>
                 </div>
-                <div class="card__foot">
-                  <a class="link" href="#" data-unbuilt="My Papers">View All Papers <span id="recent-arrow"></span></a>
-                </div>
+                <div class="card__foot pager" id="papers-foot"></div>
               </section>
 
               <div class="col__pair">
@@ -144,6 +167,7 @@
                       </div>
                       <div class="legend" id="donut-legend"></div>
                     </div>
+                    <div id="donut-note"></div>
                   </div>
                   <div class="card__foot">
                     <a class="link" href="#" data-unbuilt="Topic Modeling">View All <span id="donut-arrow"></span></a>
@@ -162,6 +186,7 @@
                     <div class="chart-legend" id="trends-legend"></div>
                     <div id="trends-mount"></div>
                     <div id="trends-table" hidden></div>
+                    <div id="trends-note"></div>
                   </div>
                   <div class="card__foot">
                     <a class="link" href="#" data-unbuilt="Research Trends">View Trends <span id="trends-arrow"></span></a>

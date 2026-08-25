@@ -96,6 +96,7 @@ class SplitData:
     records: list[DatasetRecord]
     texts: list[str]
     labels: list[str]
+    label_sets: list[list[str]]
 
     def __len__(self) -> int:
         """Number of records in the split."""
@@ -112,6 +113,15 @@ class SplitData:
         counts: dict[str, int] = {}
         for label in self.labels:
             counts[label] = counts.get(label, 0) + 1
+        return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
+    @property
+    def multilabel_class_counts(self) -> dict[str, int]:
+        """Multi-label frequencies, most common first."""
+        counts: dict[str, int] = {}
+        for labels in self.label_sets:
+            for label in labels:
+                counts[label] = counts.get(label, 0) + 1
         return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
@@ -162,8 +172,14 @@ class ProcessedDataset:
         """Return findings in JSON-serialisable form."""
         return [finding.as_dict() for finding in self.findings]
 
+    @property
+    def is_multilabel(self) -> bool:
+        """Whether the processed dataset was built in multi-label mode."""
+        mode = ((self.manifest.get("config") or {}).get("labels") or {}).get("mode")
+        return mode == "multilabel"
 
-def _load_split(directory: Path, name: str) -> SplitData:
+
+def _load_split(directory: Path, name: str, *, multilabel: bool = False) -> SplitData:
     """Parse one split file into validated records.
 
     Raises:
@@ -186,15 +202,18 @@ def _load_split(directory: Path, name: str) -> SplitData:
                 f"it with scripts/build_dataset.py.\n{exc}"
             ) from exc
 
-    # A record without a primary label cannot supply a multi-class target. It is
-    # dropped rather than mapped to a placeholder class, which would invent a
-    # category the taxonomy does not contain.
-    usable = [record for record in records if record.label]
+    # A record without a primary label cannot supply a multi-class target. In
+    # multi-label mode, secondary labels are the target, so a non-empty label set
+    # is enough to keep the row.
+    usable = [record for record in records if record.labels] if multilabel else [
+        record for record in records if record.label
+    ]
     if len(usable) != len(records):
         logger.warning(
-            "data | %s: dropped %d record(s) with no primary label",
+            "data | %s: dropped %d record(s) with no usable %s label",
             path.name,
             len(records) - len(usable),
+            "multi-label" if multilabel else "primary",
         )
 
     return SplitData(
@@ -203,6 +222,7 @@ def _load_split(directory: Path, name: str) -> SplitData:
         records=usable,
         texts=[record.text for record in usable],
         labels=[record.label or "" for record in usable],
+        label_sets=[list(record.labels) for record in usable],
     )
 
 
@@ -348,6 +368,7 @@ def load_processed_dataset(
     manifest: dict[str, Any] = read_json(manifest_path)
     vocabulary: dict[str, Any] = read_json(vocabulary_path)
     classes: list[str] = list(vocabulary.get("classes") or [])
+    multilabel = ((manifest.get("config") or {}).get("labels") or {}).get("mode") == "multilabel"
 
     missing = [
         name for name in required_splits if not (directory / split_file_name(name)).is_file()
@@ -361,7 +382,7 @@ def load_processed_dataset(
     splits: dict[str, SplitData] = {}
     for name in SPLIT_NAMES:
         if (directory / split_file_name(name)).is_file():
-            splits[name] = _load_split(directory, name)
+            splits[name] = _load_split(directory, name, multilabel=multilabel)
 
     for name in required_splits:
         if not len(splits[name]):

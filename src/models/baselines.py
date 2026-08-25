@@ -33,6 +33,7 @@ import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
@@ -176,24 +177,12 @@ def build_baseline(
 
     Raises:
         KeyError: If ``name`` is not a configured baseline.
-        NotImplementedError: If ``multilabel`` is set. The multi-label path needs
-            a :class:`~sklearn.preprocessing.MultiLabelBinarizer` on the targets
-            and a :class:`~sklearn.multiclass.OneVsRestClassifier` around the
-            head, plus a metric set of its own. None of that is implemented or
-            tested yet, and a pipeline that silently trained on primary labels
-            alone would report multi-class numbers under a multi-label heading.
     """
-    if multilabel:
-        raise NotImplementedError(
-            "Multi-label training is not implemented in Milestone 1. The dataset "
-            "build already writes multi-label targets to the `labels` field, so no "
-            "re-fetch is needed when it lands, but no multi-label model, metric "
-            "set, or test exists yet. Set labels.mode: multiclass in "
-            "configs/config.yaml (or pass --mode multiclass to the dataset build)."
-        )
-
     baseline = model_config.baseline(name)
     vectorizer_config = model_config.vectorizer_for(name)
+    classifier = build_classifier(baseline.classifier, seed=seed)
+    if multilabel:
+        classifier = OneVsRestClassifier(classifier)
 
     logger.info(
         "model | %s: %s(%s) -> %s(%s)",
@@ -207,7 +196,7 @@ def build_baseline(
     return Pipeline(
         [
             (VECTORIZER_STEP, build_vectorizer(vectorizer_config)),
-            (CLASSIFIER_STEP, build_classifier(baseline.classifier, seed=seed)),
+            (CLASSIFIER_STEP, classifier),
         ]
     )
 
