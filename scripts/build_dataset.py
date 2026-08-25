@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,14 @@ import _bootstrap  # noqa: F401
 from src.config.settings import Settings, load_settings
 from src.data_pipeline.dedup import deduplicate
 from src.data_pipeline.labels import LabelingError, build_records
-from src.data_pipeline.split import SPLIT_NAMES, LeakageError, split_records
+from src.data_pipeline.split import (
+    DATASET_MANIFEST_NAME,
+    LABEL_VOCABULARY_NAME,
+    SPLIT_NAMES,
+    LeakageError,
+    split_file_name,
+    split_records,
+)
 from src.data_pipeline.validation import ValidationError, validate_corpus
 from src.ingestion.base import IngestionError
 from src.ingestion.loader import load_manifest, load_papers
@@ -54,8 +61,8 @@ from src.utils.seed import set_seed
 
 logger = get_logger(__name__)
 
-MANIFEST_NAME = "dataset_manifest.json"
-VOCABULARY_NAME = "label_vocabulary.json"
+# The two shared names live in src.data_pipeline.split, which the training
+# loader also reads them from; only this build report is written nowhere else.
 QUALITY_REPORT_NAME = "data_quality_report.md"
 
 
@@ -152,7 +159,7 @@ def _write_splits(records: list[DatasetRecord], out_dir: Path) -> dict[str, dict
     written: dict[str, dict[str, Any]] = {}
     for split_name in SPLIT_NAMES:
         members = [r for r in records if r.split == split_name]
-        destination = out_dir / f"{split_name}.jsonl"
+        destination = out_dir / split_file_name(split_name)
         count = write_jsonl(destination, (r.model_dump(mode="json") for r in members))
         written[split_name] = {
             "path": _relative_to_root(destination),
@@ -168,7 +175,7 @@ def _write_quality_markdown(path: Path, sections: list[tuple[str, list[str]]]) -
     lines = [
         "# Dataset Build Report",
         "",
-        f"Generated {datetime.now(timezone.utc).isoformat(timespec='seconds')}.",
+        f"Generated {datetime.now(UTC).isoformat(timespec='seconds')}.",
         "",
     ]
     for title, body in sections:
@@ -215,7 +222,7 @@ def build(settings: Settings, source: Path | str, out_dir: Path) -> dict[str, An
 
     files = _write_splits(assigned, out_dir)
     write_json(
-        out_dir / VOCABULARY_NAME,
+        out_dir / LABEL_VOCABULARY_NAME,
         {
             "mode": labels_config.mode,
             "taxonomy_level": labels_config.taxonomy_level,
@@ -227,7 +234,7 @@ def build(settings: Settings, source: Path | str, out_dir: Path) -> dict[str, An
     )
 
     manifest: dict[str, Any] = {
-        "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "source": str(source),
         "source_fetch_manifest": fetch_manifest.model_dump(mode="json") if fetch_manifest else None,
         "git_commit": git_commit_sha(),
@@ -247,7 +254,7 @@ def build(settings: Settings, source: Path | str, out_dir: Path) -> dict[str, An
             "split": split_manifest.model_dump(mode="json"),
         },
     }
-    write_json(out_dir / MANIFEST_NAME, manifest)
+    write_json(out_dir / DATASET_MANIFEST_NAME, manifest)
 
     _write_quality_markdown(
         out_dir / QUALITY_REPORT_NAME,

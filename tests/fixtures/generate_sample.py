@@ -165,7 +165,9 @@ AI_2 = topic("T10182", "Topic Modeling", "Artificial Intelligence", "1702", scor
 CV = topic(
     "T10201", "Image Segmentation Methods", "Computer Vision and Pattern Recognition", "1707"
 )
-CV_2 = topic("T10202", "Object Detection", "Computer Vision and Pattern Recognition", "1707", score=0.55)
+CV_2 = topic(
+    "T10202", "Object Detection", "Computer Vision and Pattern Recognition", "1707", score=0.55
+)
 NET = topic("T10301", "Wireless Sensor Networks", "Computer Networks and Communications", "1705")
 HCI = topic("T10401", "User Interface Design", "Human-Computer Interaction", "1709")
 SIG = topic("T10501", "Adaptive Filtering", "Signal Processing", "1711")
@@ -186,12 +188,15 @@ NEAR_BASE = (
     "survives upsampling, and a boundary aware loss term penalises leakage across adjacent tissue "
     "classes. We further describe a patch sampling schedule that keeps class balance stable when "
     "tumour cores occupy only a small fraction of the imaged volume. An ablation isolates the "
-    "contribution of the window shifting mechanism from that of the decoder skip connections, and a "
+    "contribution of the window shifting mechanism from that of the decoder skip connections, and "
+    "a "
     "second ablation varies the depth of the encoder hierarchy to show where additional capacity "
-    "stops paying for itself. We also report inter rater agreement on a held out subset in order to "
+    "stops paying for itself. We also report inter rater agreement on a held out subset in order "
+    "to "
     "place the automatic scores in the context of ordinary human labelling variance. Across two "
     "public benchmarks the method attains a higher mean Dice coefficient than competitive fully "
-    "convolutional architectures while remaining efficient enough for routine inference on a single "
+    "convolutional architectures while remaining efficient enough for routine inference on a "
+    "single "
     "accelerator."
 )
 # Realistic published-version edit: the closing clause is rewritten. The base
@@ -237,7 +242,8 @@ A_SUMM = (
 A_RS = (
     "We revisit self supervised pretraining for dense prediction in multispectral satellite "
     "imagery. A masked autoencoding objective is adapted by reconstructing band specific "
-    "statistics rather than raw pixel intensities, which avoids collapse when spectral bands differ "
+    "statistics rather than raw pixel intensities, which avoids collapse when spectral bands "
+    "differ "
     "in dynamic range. Transfer experiments on land cover mapping and change detection show that "
     "spectrally aware pretext tasks converge faster than supervised initialisation."
 )
@@ -279,12 +285,14 @@ A_TRIAGE = (
 A_DIARY = (
     "Sensemaking during literature review is fragmented across reading, note taking, and reference "
     "management applications. We report a four week diary study of graduate researchers and "
-    "characterise the artefacts they build to externalise emerging structure. Our findings motivate "
+    "characterise the artefacts they build to externalise emerging structure. Our findings "
+    "motivate "
     "interfaces that treat annotation and organisation as one continuous activity rather than as "
     "separate application modes."
 )
 A_ACCESS = (
-    "Screen reader users encounter systematic barriers when navigating mathematical notation on the "
+    "Screen reader users encounter systematic barriers when navigating mathematical notation on "
+    "the "
     "web. We audit two hundred technical pages and catalogue the markup patterns that defeat "
     "assistive technology, then co design an alternative navigation model with eight blind "
     "participants. The resulting prototype reduces task completion time for equation exploration "
@@ -308,7 +316,8 @@ A_COMPILER = (
     "Register allocation for vector extensions must reconcile variable length vectors with fixed "
     "physical register files. We present a live range splitting heuristic that accounts for vector "
     "length agnostic instructions and quantifies spill cost in terms of achieved memory bandwidth "
-    "rather than instruction count. Benchmarks across kernels show reduced spill traffic and modest "
+    "rather than instruction count. Benchmarks across kernels show reduced spill traffic and "
+    "modest "
     "throughput improvements."
 )
 A_TESTING = (
@@ -329,7 +338,8 @@ A_ACTIVE = (
     "Annotation budgets dominate the cost of building supervised classifiers for specialised "
     "domains. We compare acquisition functions for pool based active learning when the unlabelled "
     "pool is itself biased, and show that uncertainty sampling amplifies that bias unless coupled "
-    "with a density term. A stratified acquisition variant recovers most of the accuracy attainable "
+    "with a density term. A stratified acquisition variant recovers most of the accuracy "
+    "attainable "
     "under fully random labelling at half the annotation volume."
 )
 SHORT = "We propose a method. It works well."

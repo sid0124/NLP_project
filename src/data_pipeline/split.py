@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 from sklearn.model_selection import train_test_split
@@ -42,16 +42,36 @@ from src.utils.io import sha256_text
 from src.utils.logging import get_logger
 
 __all__ = [
+    "DATASET_MANIFEST_NAME",
+    "LABEL_VOCABULARY_NAME",
+    "SPLIT_NAMES",
     "LeakageError",
     "SplitManifest",
     "SplitStats",
     "audit_leakage",
+    "split_file_name",
     "split_records",
 ]
 
 logger = get_logger(__name__)
 
 SPLIT_NAMES: tuple[SplitName, ...] = ("train", "val", "test")
+
+# --------------------------------------------------------------------------
+# On-disk contract for ``data/processed``
+# --------------------------------------------------------------------------
+# A build writes one ``<split>.jsonl`` per entry in SPLIT_NAMES, plus these two
+# sidecar files. The producer (``scripts/build_dataset.py``) and the consumer
+# (:mod:`src.training.dataset`) both take the names from here, so a rename
+# cannot leave one side reading a file the other stopped writing.
+SPLIT_FILE_SUFFIX = ".jsonl"
+DATASET_MANIFEST_NAME = "dataset_manifest.json"
+LABEL_VOCABULARY_NAME = "label_vocabulary.json"
+
+
+def split_file_name(split: str) -> str:
+    """Return the JSONL file name holding one split's records."""
+    return f"{split}{SPLIT_FILE_SUFFIX}"
 
 
 class LeakageError(RuntimeError):
@@ -355,7 +375,7 @@ def split_records(
         {label for r in assigned for label in (r.labels if multilabel else [r.label]) if label}
     )
     manifest = SplitManifest(
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         seed=seed,
         mode="multilabel" if multilabel else "multiclass",
         stratified=stratified,

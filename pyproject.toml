@@ -45,7 +45,13 @@ markers = [
     "slow: test takes more than a few seconds",
 ]
 filterwarnings = [
+    # Our own deprecations are bugs to fix, so they fail the suite.
     "error::DeprecationWarning:src.*",
+    # matplotlib 3.9 calls pyparsing's pre-3.0 camelCase API while loading fonts.
+    # Third-party and not actionable here; it would otherwise bury the report of
+    # any test that renders a figure. Revisit when matplotlib is upgraded.
+    "ignore::DeprecationWarning:matplotlib._fontconfig_pattern",
+    "ignore::DeprecationWarning:matplotlib._mathtext",
 ]
 
 # =============================================================================

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -116,7 +116,8 @@ def _parse_topic(raw: Any) -> TopicAssignment | None:
         return None
 
     raw_score = raw.get("score")
-    score = float(raw_score) if isinstance(raw_score, int | float) and not isinstance(raw_score, bool) else 0.0
+    numeric_score = isinstance(raw_score, int | float) and not isinstance(raw_score, bool)
+    score = float(raw_score) if numeric_score else 0.0
 
     def nested(key: str) -> str | None:
         node = raw.get(key)
@@ -267,7 +268,9 @@ class OpenAlexSource(IngestionSource):
                 timeout=self.config.request.timeout_seconds,
             )
         except requests.RequestException as exc:
-            raise IngestionError(f"OpenAlex request failed for filter '{filter_string}': {exc}") from exc
+            raise IngestionError(
+                f"OpenAlex request failed for filter '{filter_string}': {exc}"
+            ) from exc
 
         if response.status_code != 200:
             raise IngestionError(
@@ -279,10 +282,14 @@ class OpenAlexSource(IngestionSource):
         except ValueError as exc:
             raise IngestionError(f"OpenAlex returned non-JSON payload: {exc}") from exc
         if not isinstance(payload, dict):
-            raise IngestionError(f"Expected a JSON object from OpenAlex, got {type(payload).__name__}")
+            raise IngestionError(
+                f"Expected a JSON object from OpenAlex, got {type(payload).__name__}"
+            )
         return payload
 
-    def _fetch_class(self, target_id: str, class_name: str, limit: int) -> tuple[list[dict[str, Any]], int | None]:
+    def _fetch_class(
+        self, target_id: str, class_name: str, limit: int
+    ) -> tuple[list[dict[str, Any]], int | None]:
         """Page through all works for one class, up to ``limit`` records.
 
         Returns:
@@ -318,7 +325,9 @@ class OpenAlexSource(IngestionSource):
 
         return records, available
 
-    def fetch(self, destination: Path, *, run_id: str, limit_per_class: int | None = None) -> FetchManifest:
+    def fetch(
+        self, destination: Path, *, run_id: str, limit_per_class: int | None = None
+    ) -> FetchManifest:
         """Fetch one JSONL shard per class, plus a manifest, into ``destination``.
 
         Fetching per class produces a stratified corpus by construction, which
@@ -390,7 +399,7 @@ class OpenAlexSource(IngestionSource):
         manifest = FetchManifest(
             source=self.name,
             run_id=run_id,
-            fetched_at=datetime.now(timezone.utc),
+            fetched_at=datetime.now(UTC),
             taxonomy_level=self.settings.app.labels.taxonomy_level,
             query={
                 "base_url": self.config.base_url,

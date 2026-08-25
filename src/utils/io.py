@@ -37,6 +37,7 @@ __all__ = [
     "write_json",
     "write_jsonl",
     "write_text",
+    "write_yaml",
 ]
 
 logger = get_logger(__name__)
@@ -88,7 +89,10 @@ def read_yaml(path: Path | str) -> dict[str, Any]:
     if loaded is None:
         return {}
     if not isinstance(loaded, dict):
-        raise ValueError(f"Expected a YAML mapping at the top level of {resolved}, got {type(loaded).__name__}")
+        raise ValueError(
+            f"Expected a YAML mapping at the top level of {resolved}, "
+            f"got {type(loaded).__name__}"
+        )
     return loaded
 
 
@@ -106,6 +110,32 @@ def read_json(path: Path | str) -> Any:
         return json.loads(resolved.read_text(encoding=ENCODING))
     except json.JSONDecodeError as exc:
         raise ValueError(f"Invalid JSON in {resolved}: {exc}") from exc
+
+
+def write_yaml(path: Path | str, obj: Any, *, sort_keys: bool = False) -> Path:
+    """Serialise ``obj`` to YAML atomically.
+
+    Used to persist the resolved run configuration alongside its JSON twin, so a
+    run directory is legible without a JSON viewer.
+
+    Args:
+        path: Destination file; parent directories are created as needed.
+        obj: Any object ``yaml.safe_dump`` accepts.
+        sort_keys: Sort mapping keys; off by default so declaration order is
+            preserved for readability.
+
+    Returns:
+        The resolved destination path.
+    """
+    resolved = resolve_path(path)
+    # safe_dump refuses non-primitive types such as Path, so the object is first
+    # coerced through the JSON encoder. That reuses _json_default's rules rather
+    # than duplicating a second set of them here.
+    plain = json.loads(json.dumps(obj, ensure_ascii=False, default=_json_default))
+    payload = yaml.safe_dump(
+        plain, sort_keys=sort_keys, allow_unicode=True, default_flow_style=False, width=100
+    )
+    return atomic_write_text(resolved, payload)
 
 
 def write_json(path: Path | str, obj: Any, *, indent: int = 2, sort_keys: bool = False) -> Path:
@@ -178,9 +208,13 @@ def read_jsonl(path: Path | str, *, skip_malformed: bool = False) -> Iterator[di
                 yield json.loads(stripped)
             except json.JSONDecodeError as exc:
                 if skip_malformed:
-                    logger.warning("Skipping malformed JSONL line %d in %s: %s", line_number, resolved, exc)
+                    logger.warning(
+                        "Skipping malformed JSONL line %d in %s: %s", line_number, resolved, exc
+                    )
                     continue
-                raise ValueError(f"Invalid JSON on line {line_number} of {resolved}: {exc}") from exc
+                raise ValueError(
+                    f"Invalid JSON on line {line_number} of {resolved}: {exc}"
+                ) from exc
 
 
 def write_jsonl(path: Path | str, records: Iterable[dict[str, Any]]) -> int:

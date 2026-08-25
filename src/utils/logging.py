@@ -14,12 +14,13 @@ cannot express on its own:
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import logging.config
 import sys
 import uuid
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -74,7 +75,7 @@ def new_run_id(prefix: str = "") -> str:
     Returns:
         The generated run identifier.
     """
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     suffix = uuid.uuid4().hex[:6]
     return f"{prefix}-{stamp}-{suffix}" if prefix else f"{stamp}-{suffix}"
 
@@ -106,10 +107,10 @@ def force_utf8_streams() -> None:
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is None:
             continue
-        try:
+        # The stream may already be closed or detached under a test runner's
+        # capture layer; that must not break logging setup.
+        with contextlib.suppress(ValueError, OSError):
             reconfigure(encoding="utf-8", errors="replace")
-        except (ValueError, OSError):  # pragma: no cover - stream already closed
-            pass
 
 
 def _apply_fallback_config(level: str) -> None:
