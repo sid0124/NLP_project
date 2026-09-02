@@ -76,9 +76,8 @@ def stats(run: ActiveRun) -> StatsResponse:
     non-optional.
     """
     split = run.primary_split
-    split_sizes = run.summary().split_sizes
-    total = sum(split_sizes.values())
-    held_out = sum(count for name, count in split_sizes.items() if name in HELD_OUT_SPLITS)
+    total = len(run.papers)
+    held_out = sum(1 for e in run.papers.values() if e.split in HELD_OUT_SPLITS or e.split == "uploaded")
 
     tiles: list[StatTile] = [
         StatTile(

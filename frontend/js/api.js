@@ -59,7 +59,16 @@ export class ApiError extends Error {
 /** Resolve the API root. */
 function base() {
   const override = document.documentElement.dataset.apiBase;
-  return (override || "/api").replace(/\/$/, "");
+  if (override) return override.replace(/\/$/, "");
+  if (
+    window.location.protocol === "file:" ||
+    window.location.port === "5173" ||
+    window.location.port === "3000" ||
+    window.location.port === "8080"
+  ) {
+    return "http://127.0.0.1:8000/api";
+  }
+  return "/api";
 }
 
 function keyHeader() {
@@ -107,14 +116,15 @@ async function request(path, { method = "GET", body, timeout = TIMEOUT_MS } = {}
 
   let response;
   try {
+    const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
     response = await fetch(base() + path, {
       method,
       headers: {
         Accept: "application/json",
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(body === undefined || isFormData ? {} : { "Content-Type": "application/json" }),
         ...keyHeader(),
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
       signal: controller.signal,
       credentials: "same-origin",
     });
@@ -196,17 +206,16 @@ export const getExplanation = (paperId) =>
 export const classify = (title, abstract = "") =>
   request("/papers/classify", { method: "POST", body: { title, abstract } });
 
-/**
- * POST /api/papers/{id}/ask — always refuses in this build.
- *
- * Kept as a real request rather than a client-side shortcut. The refusal and
- * its wording are the server's (master spec §20); if a retrieval index lands
- * later, this call starts succeeding with no change here.
- *
- * @throws {ApiError} 501 with the refusal as `detail`.
- */
+/** POST /api/papers/{id}/ask — grounded retrieval plus optional Groq synthesis. */
 export const ask = (paperId, question) =>
   request(`/papers/${encodeURIComponent(paperId)}/ask`, {
     method: "POST",
     body: { question },
   });
+
+/** POST /api/papers/upload — upload a PDF or paper document. */
+export const uploadPaper = (file) => {
+  const data = new FormData();
+  data.append("file", file);
+  return request("/papers/upload", { method: "POST", body: data });
+};

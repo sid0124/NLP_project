@@ -242,31 +242,18 @@ def test_ask_validates_the_question_before_refusing(svm_client: TestClient) -> N
 # ---------------------------------------------------------------------------
 # Refusal rather than fabrication (master spec §20)
 # ---------------------------------------------------------------------------
-def test_ask_refuses_with_the_exact_required_sentence(svm_client: TestClient) -> None:
-    """Question answering returns 501 and §20's wording, verbatim.
-
-    The endpoint exists so the dashboard's composer has a definite answer to
-    submitting a question. It refuses categorically rather than per question
-    because there is no retriever and no full text, so *every* answer would be
-    ungrounded — the one outcome §20 forbids.
-    """
+def test_ask_returns_answer_or_ungrounded_refusal(svm_client: TestClient) -> None:
+    """Question answering returns HTTP 200 with an answer or §20's refusal sentence when ungrounded."""
     paper_id = svm_client.get("/api/papers", params={"limit": 1}).json()["items"][0]["paper_id"]
     response = svm_client.post(
-        f"/api/papers/{paper_id}/ask", json={"question": "What method does this paper use?"}
+        f"/api/papers/{paper_id}/ask", json={"question": "What is the recipe for baking a chocolate cake?"}
     )
 
-    assert response.status_code == 501
-    body = error_body(response)
-    assert body["error"] == "not_implemented"
-    assert body["detail"] == RAG_REFUSAL
-
-    # A slug for code, a sentence for people. The user-facing explanation lives in
-    # the ``rag_ask`` capability so the wording has one home.
-    assert response.headers["X-Unavailable-Reason"] == "retrieval-index-missing"
-    capabilities = {
-        entry["key"]: entry for entry in svm_client.get("/api/meta").json()["capabilities"]
-    }
-    assert capabilities["rag_ask"]["reason"] == RAG_UNAVAILABLE_REASON
+    assert response.status_code == 200
+    body = response.json()
+    assert body["paper_id"] == paper_id
+    assert body["answer"] == "Information not found in the provided paper."
+    assert body["confidence"] == 0.0
 
 
 def test_ask_about_an_unknown_paper_is_404_not_501(svm_client: TestClient) -> None:

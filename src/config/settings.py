@@ -625,6 +625,10 @@ class EnvSettings(BaseSettings):
     aris_cors_origins: str | None = None
     #: Pins the run the dashboard reads, overriding ``runs.default_run_id``.
     aris_run_id: str | None = None
+    #: Groq is used only for grounded paper Q&A. It is never serialized in API
+    #: responses or copied into a run artifact.
+    groq_api_key: str | None = None
+    groq_model: str = "openai/gpt-oss-120b"
 
     @property
     def cors_origin_list(self) -> list[str] | None:

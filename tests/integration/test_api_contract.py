@@ -48,12 +48,6 @@ from tests.integration.conftest import (
 #: UI renders verbatim. Pinned as a set so landing one of them has to be a
 #: deliberate edit here rather than a silent change in tone.
 UNBUILT_CAPABILITIES = {
-    "similarity_semantic",
-    "section_attention",
-    "rag_ask",
-    "pdf_upload",
-    "comparison",
-    "research_gaps",
     "authentication",
 }
 
@@ -135,12 +129,20 @@ def test_every_unavailable_capability_explains_itself(svm_client: TestClient) ->
     for key in UNBUILT_CAPABILITIES:
         assert capabilities[key]["available"] is False, f"{key} claims to be built"
 
-    # With a complete run loaded, everything this milestone does build is on.
-    for key in ("corpus", "classification", "confidence", "similarity_lexical", "trends"):
+    for key in (
+        "corpus",
+        "classification",
+        "confidence",
+        "similarity_lexical",
+        "similarity_semantic",
+        "trends",
+        "section_attention",
+        "rag_ask",
+        "pdf_upload",
+        "comparison",
+        "research_gaps",
+    ):
         assert capabilities[key]["available"] is True, f"{key} should be available"
-
-    assert capabilities["section_attention"]["reason"] == ATTENTION_UNAVAILABLE_REASON
-    assert capabilities["rag_ask"]["reason"] == RAG_UNAVAILABLE_REASON
 
 
 def test_meta_declares_the_corpus_synthetic(svm_client: TestClient) -> None:
@@ -598,20 +600,33 @@ def test_explanation_reports_the_raw_decision_value(svm_client: TestClient) -> N
     assert abs(explanation["decision_value"] - scores[explanation["predicted_label"]]) < 1e-6
 
 
-def test_section_attention_is_explicitly_unavailable(svm_client: TestClient) -> None:
-    """The attention panel reports "not built" rather than an approximation.
-
-    Splitting an abstract into thirds and summing term weights would draw the
-    same chart and mean something else. The dashboard's section-attention panel
-    renders this reason verbatim, and the ``requires`` line names what would fill
-    it — which is the project's novel contribution, not a missing detail.
-    """
+def test_section_attention_returns_section_weights(svm_client: TestClient) -> None:
+    """The explanation endpoint returns active section attention weights for canonical sections."""
     paper_id = first_paper_id(svm_client)
     attention = get(svm_client, f"/api/papers/{paper_id}/explanation")["section_attention"]
 
-    assert attention["available"] is False
-    assert attention["reason"] == ATTENTION_UNAVAILABLE_REASON
-    assert "Milestone 3" in attention["requires"]
+    assert attention["available"] is True
+    assert len(attention["sections"]) > 0
+    for sec in attention["sections"]:
+        assert sec["name"]
+        assert sec["canonical_name"]
+        assert 0.0 <= sec["weight"] <= 1.0
+
+
+def test_ask_endpoint_returns_passage_evidence_answer(svm_client: TestClient) -> None:
+    """POST /papers/{id}/ask returns passage-grounded Q&A answers."""
+    paper_id = first_paper_id(svm_client)
+    response = svm_client.post(
+        f"/api/papers/{paper_id}/ask",
+        json={"question": "What is the main topic or dataset of this paper?"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+
+    assert body["paper_id"] == paper_id
+    assert body["question"] == "What is the main topic or dataset of this paper?"
+    assert body["answer"]
+    assert body["confidence"] >= 0.0
 
 
 def test_explanation_works_for_a_training_paper_and_says_it_is_a_fit(

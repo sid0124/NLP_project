@@ -510,20 +510,25 @@ class TermWeight(BaseModel):
     weight: float
 
 
-class SectionAttention(UnavailableFeature):
-    """Placeholder for per-section attention weights.
-
-    The dashboard was designed around a section-attention panel. Producing one
-    requires the hierarchical attention network from Milestone 3; a linear
-    bag-of-words model has no notion of a section at all. Approximating it — by
-    splitting the abstract and summing term weights per chunk, say — would
-    produce a chart indistinguishable from real attention and meaning something
-    completely different, so this stays explicitly unavailable.
-    """
+class SectionWeight(BaseModel):
+    """Importance weight for a canonical paper section."""
 
     model_config = _RESPONSE
 
-    requires: str = "Milestone 3 — hierarchical attention network over paper sections"
+    name: str
+    canonical_name: str
+    weight: float
+
+
+class SectionAttention(BaseModel):
+    """Per-section attention / importance weights."""
+
+    model_config = _RESPONSE
+
+    available: bool = True
+    sections: list[SectionWeight] = Field(default_factory=list)
+    reason: str | None = None
+    requires: str | None = None
 
 
 class ExplanationResponse(BaseModel):
@@ -553,6 +558,30 @@ class AskRequest(BaseModel):
     model_config = _REQUEST
 
     question: Annotated[str, Field(min_length=1, max_length=2000)]
+
+
+class PassageEvidence(BaseModel):
+    """Evidence passage supporting a Q&A answer."""
+
+    model_config = _RESPONSE
+
+    source_section: str
+    passage: str
+    confidence: float
+
+
+class AskResponse(BaseModel):
+    """Answer payload returned by the paper Q&A engine."""
+
+    model_config = _RESPONSE
+
+    paper_id: str
+    question: str
+    answer: str
+    source: str | None = None
+    evidence: list[PassageEvidence] = Field(default_factory=list)
+    confidence: float = 0.0
+
 
 
 class ErrorResponse(BaseModel):

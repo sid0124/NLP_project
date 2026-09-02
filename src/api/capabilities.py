@@ -173,8 +173,8 @@ def capabilities_for(run: LoadedRun | None) -> list[Capability]:
         Capability(
             key="similarity_semantic",
             label="Semantic similarity",
-            available=False,
-            reason=_SEMANTIC_UNAVAILABLE_REASON,
+            available=has_model,
+            reason=model_reason,
         ),
         Capability(
             key="explanation_terms",
@@ -192,8 +192,8 @@ def capabilities_for(run: LoadedRun | None) -> list[Capability]:
         Capability(
             key="section_attention",
             label="Section attention",
-            available=False,
-            reason=ATTENTION_UNAVAILABLE_REASON,
+            available=has_model and run is not None,
+            reason=None if (has_model and run is not None) else ATTENTION_UNAVAILABLE_REASON,
         ),
         Capability(
             key="trends",
@@ -208,30 +208,26 @@ def capabilities_for(run: LoadedRun | None) -> list[Capability]:
         Capability(
             key="rag_ask",
             label="Research assistant",
-            available=False,
-            reason=RAG_UNAVAILABLE_REASON,
+            available=run is not None,
+            reason=None if run is not None else RAG_UNAVAILABLE_REASON,
         ),
         Capability(
             key="pdf_upload",
             label="PDF upload",
-            available=False,
-            reason=_PDF_UNAVAILABLE_REASON,
+            available=run is not None,
+            reason=None if run is not None else _PDF_UNAVAILABLE_REASON,
         ),
         Capability(
             key="comparison",
             label="Paper comparison",
-            available=False,
-            reason="Multi-paper comparison is a later milestone.",
+            available=run is not None,
+            reason=None if run is not None else no_run,
         ),
         Capability(
             key="research_gaps",
             label="Research gaps",
-            available=False,
-            reason=(
-                "Gap detection is a later milestone. When it lands its output is "
-                "candidate gaps for a researcher to judge, never verified gaps "
-                "(master spec §23)."
-            ),
+            available=run is not None,
+            reason=None if run is not None else no_run,
         ),
         Capability(
             key="authentication",

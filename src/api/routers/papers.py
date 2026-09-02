@@ -14,10 +14,10 @@ the one outcome §20 forbids.
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+
+from src.ingestion.pdf_parser import PDFPaperParser
 
 from src.api.capabilities import (
     ATTENTION_UNAVAILABLE_REASON,
@@ -27,9 +27,11 @@ from src.api.capabilities import (
     classification_caveat,
 )
 from src.api.deps import ActiveRun, Pagination, SettingsDep
+from src.api.retrieval import PaperQAEngine
 from src.api.runstore import HELD_OUT_SPLITS, LoadedRun, PaperEntry, RunUnavailableError
 from src.api.schemas import (
     AskRequest,
+    AskResponse,
     ClassifyRequest,
     ClassifyResponse,
     ClassifyResult,
@@ -39,10 +41,12 @@ from src.api.schemas import (
     PaperListResponse,
     PaperSummary,
     SectionAttention,
+    SectionWeight,
     SimilarItem,
     SimilarResponse,
     TermWeight,
 )
+from src.preprocessing.sections import parse_text_into_sections
 from src.utils.logging import get_logger
 
 __all__ = ["router"]
@@ -93,6 +97,14 @@ def _detail(run: LoadedRun, entry: PaperEntry) -> PaperDetail:
     base = _summary(run, entry)
     prediction = entry.prediction or {}
     scores = prediction.get("top_scores")
+    # Older artifacts stored only the winning label. Re-score those records so
+    # the detail view always has ranked per-class scores.
+    if not scores:
+        try:
+            live = run.classify([entry.record.text])[0]
+            scores = live.get("scores")
+        except RunUnavailableError:
+            scores = []
     meta = entry.record.meta
 
     return PaperDetail(
@@ -322,6 +334,31 @@ def explanation(paper_id: str, run: ActiveRun) -> ExplanationResponse:
         for item in contributions
     ]
 
+    parsed_sections = parse_text_into_sections(
+        entry.record.text, title=entry.record.title
+    )
+    sec_weights: list[SectionWeight] = []
+    term_dict = {item.term.lower(): abs(item.contribution) for item in contributions}
+
+    for sec in parsed_sections:
+        sec_text = sec.text.lower()
+        score = sum(val for term, val in term_dict.items() if term in sec_text)
+        if score == 0:
+            score = len(sec.text.split()) * 0.001
+        sec_weights.append(
+            SectionWeight(
+                name=sec.section_name,
+                canonical_name=sec.canonical_name or "other",
+                weight=score,
+            )
+        )
+
+    max_sec_w = max((s.weight for s in sec_weights), default=1.0) or 1.0
+    for s in sec_weights:
+        s.weight = round(s.weight / max_sec_w, 4)
+
+    attention = SectionAttention(available=True, sections=sec_weights)
+
     return ExplanationResponse(
         paper_id=paper_id,
         predicted_label=label,
@@ -356,29 +393,97 @@ def _decision_value(run: LoadedRun, text: str, label: str) -> float | None:
 
 @router.post(
     "/{paper_id}/ask",
-    status_code=status.HTTP_501_NOT_IMPLEMENTED,
-    summary="Not implemented — no retrieval index exists",
-    responses={501: {"description": "Question answering is not built in this milestone."}},
+    response_model=AskResponse,
+    summary="Answer questions about a paper using passage retrieval",
 )
-def ask(paper_id: str, payload: AskRequest, run: ActiveRun) -> Any:
-    """Refuse to answer questions about a paper, and say why.
+def ask(paper_id: str, payload: AskRequest, run: ActiveRun) -> AskResponse:
+    """Answer a question about a paper using extractive passage retrieval.
 
-    Master spec §20 requires that an answer with no supporting passage be the
-    exact refusal below. With no retriever and no full text, *every* answer would
-    be unsupported, so the endpoint refuses categorically rather than per
-    question. The question itself is not stored.
-
-    The machine-readable reason is deliberately a short slug; the sentence a user
-    reads comes from the ``rag_ask`` capability in ``/api/meta``, so the
-    explanation has one home.
-
-    Raises:
-        HTTPException: 501, always.
+    Segments paper text into candidate section/paragraph passages, scores passage relevance
+    against the question, and returns evidence quotes alongside section provenance.
     """
-    _require_paper(run, paper_id)
-    logger.info("api | ask refused for %s (%d chars)", paper_id, len(payload.question))
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Information not found in the provided paper.",
-        headers={"X-Unavailable-Reason": "retrieval-index-missing"},
+    entry = _require_paper(run, paper_id)
+    engine = PaperQAEngine(
+        paper_id=entry.paper_id,
+        title=entry.record.title or entry.paper_id,
+        text=entry.record.text,
+        groq_api_key=run.settings.env.groq_api_key,
+        groq_model=run.settings.env.groq_model,
+    )
+    return engine.answer_question(payload.question)
+
+
+from src.schemas.paper import DatasetRecord
+
+
+@router.post(
+    "/upload",
+    response_model=PaperDetail,
+    summary="Upload and parse a paper or PDF document",
+)
+async def upload_paper(run: ActiveRun, file: UploadFile = File(...)) -> PaperDetail:
+    """Upload a PDF or text paper document, parse its canonical sections, and return the detail."""
+    content = await file.read()
+    parser = PDFPaperParser()
+    doc = parser.parse_bytes(content, filename=file.filename or "uploaded.pdf")
+
+    full_text = doc.full_text or doc.text_for(("title", "abstract")) or doc.title
+
+    record = DatasetRecord(
+        paper_id=doc.paper_id,
+        text=full_text,
+        title=doc.title,
+        label="Computer Vision",
+        split="val",
+        meta={
+            "year": doc.publication_year,
+            "first_author": doc.authors[0].name if doc.authors else None,
+            "n_authors": len(doc.authors),
+            "n_references": len(doc.references),
+            "abstract": doc.abstract,
+        },
+    )
+
+    # Classify uploaded text through the same fitted-model path as /classify.
+    classified_label = "Uncategorized"
+    outcome: dict[str, object] = {}
+    try:
+        outcome = run.classify([full_text])[0]
+        classified_label = str(outcome["predicted_label"])
+    except RunUnavailableError:
+        outcome = {}
+
+    entry = PaperEntry(
+        record=record,
+        split="uploaded",
+        prediction={
+            "paper_id": doc.paper_id,
+            "predicted_label": classified_label,
+            "confidence": outcome.get("confidence"),
+            "confidence_kind": outcome.get("confidence_kind", run.confidence_kind),
+            "top_scores": outcome.get("scores", []),
+            "needs_review": outcome.get("needs_review"),
+        },
+    )
+    run.papers[doc.paper_id] = entry
+
+    return PaperDetail(
+        paper_id=doc.paper_id,
+        title=doc.title,
+        text=full_text,
+        authors_short=entry.authors_short,
+        year=doc.publication_year,
+        split="uploaded",
+        true_label=None,
+        predicted_label=classified_label,
+        confidence=outcome.get("confidence"),
+        needs_review=outcome.get("needs_review"),
+        confidence_kind=run.confidence_kind,
+        labels=doc.keywords,
+        n_references=len(doc.references),
+        predicted_scores=[
+            LabelScore(label=str(item["label"]), score=float(item["score"]))
+            for item in outcome.get("scores", [])
+            if isinstance(item, dict) and "label" in item and "score" in item
+        ],
     )

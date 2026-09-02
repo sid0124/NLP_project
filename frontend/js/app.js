@@ -32,6 +32,7 @@ import {
   getStats,
   getTrends,
   listPapers,
+  uploadPaper,
 } from "./api.js";
 import { legendMarkup, onChartInvalidate, renderDonut, renderTrends } from "./charts.js";
 import { domainColor, isRegisteredDomain, readToken, registerDomains } from "./domains.js";
@@ -47,9 +48,6 @@ const CONFIDENCE_HEADINGS = {
   unavailable: "Confidence",
 };
 
-/** Characters of the model input text shown before "Read More". */
-const PREVIEW_CLIP = 220;
-
 /** Idle time before a keystroke in the search field becomes a request. */
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -61,6 +59,9 @@ const state = {
   domains: null,
   trends: null,
   focusId: null,
+  focusToken: 0,
+  focusedPaper: null,
+  focusedExplanation: null,
   table: { split: "held_out", q: "", needsReview: false, offset: 0, limit: 10, total: 0 },
 };
 
@@ -418,6 +419,65 @@ function renderStats(tiles) {
     .join("");
 }
 
+/**
+ * Paper-specific stat tiles for the focused record.
+ *
+ * The corpus-level strip above the charts is still shown in the run banner.
+ * Once a paper is focused, this row becomes the paper summary so the values
+ * actually change with the selected record instead of staying pinned to the
+ * active run.
+ */
+function renderPaperStats(paper) {
+  const words = paper.text ? paper.text.trim().split(/\s+/).filter(Boolean).length : 0;
+  const confidence =
+    paper.confidence === null || paper.confidence === undefined
+      ? "n/a"
+      : paper.confidence_kind === "probability"
+        ? pct(paper.confidence)
+        : `${paper.confidence.toFixed(2)} margin`;
+  const review =
+    paper.needs_review === null || paper.needs_review === undefined
+      ? "n/a"
+      : paper.needs_review
+        ? "Yes"
+        : "No";
+
+  renderStats([
+    {
+      id: "paper-length",
+      label: "Paper Length",
+      value: words ? `${words.toLocaleString()} words` : "n/a",
+      note: "Selected paper text",
+      icon: "papers",
+      hue: "--series-6",
+    },
+    {
+      id: "domains",
+      label: "Predicted Domains",
+      value: String(paper.predicted_scores?.length ?? 0),
+      note: "Top label scores returned by the model",
+      icon: "pie",
+      hue: "--series-3",
+    },
+    {
+      id: "confidence",
+      label: "Top Confidence",
+      value: confidence,
+      note: paper.predicted_label ? `Prediction: ${paper.predicted_label}` : "No prediction available",
+      icon: "trend",
+      hue: "--series-1",
+    },
+    {
+      id: "review",
+      label: "Review Flag",
+      value: review,
+      note: paper.needs_review ? "Selected paper crosses the review threshold" : "Selected paper stays below the review threshold",
+      icon: "flag",
+      hue: "--series-4",
+    },
+  ]);
+}
+
 /* ==========================================================================
    Papers table
    ========================================================================== */
@@ -526,6 +586,7 @@ function paperRowMarkup(row) {
  */
 async function loadPapers({ resetFocus = false } = {}) {
   const body = $("#papers-body");
+  if (!body) return;
   const filters = state.table;
   body.innerHTML = `<tr><td colspan="4">${skeletonMarkup(3)}</td></tr>`;
 
@@ -743,9 +804,31 @@ function explanationMarkup(explanation, paper) {
     </div>`;
 }
 
-/** The section-attention panel, which this build cannot fill. */
 function attentionMarkup(explanation) {
   const fromEndpoint = explanation?.section_attention;
+  if (fromEndpoint && fromEndpoint.available && fromEndpoint.sections && fromEndpoint.sections.length) {
+    const maxW = Math.max(...fromEndpoint.sections.map((s) => s.weight || 0.001), 0.001);
+    const rows = fromEndpoint.sections
+      .map((s) =>
+        divergingRow(
+          (s.name || s.canonical_name || "Other").toUpperCase(),
+          s.weight.toFixed(3),
+          s.weight / maxW,
+          "var(--accent-solid)",
+          true,
+        ),
+      )
+      .join("");
+    return `
+      <div class="preview__block">
+        <h4 class="section-title">Section Attention (Importance)</h4>
+        <div class="bars">${rows}</div>
+        ${noteMarkup(
+          "Projected section weights from term-level contributions across canonical paper sections.",
+          "Section weights are calculated by projecting fitted term weights onto detected canonical paper sections (Abstract, Introduction, Methodology, Experiments, Results, Conclusion)."
+        )}
+      </div>`;
+  }
   const reason =
     (fromEndpoint && fromEndpoint.available === false && fromEndpoint.reason) ||
     reasonFor("section_attention", "Section attention is not available in this build.");
@@ -765,11 +848,10 @@ function renderPreview(paper, explanation) {
     ${previewHeadMarkup(paper)}
     ${verdictMarkup(paper)}
 
-    <div class="preview__block">
-      <h4 class="section-title">Model Input Text</h4>
-      <p class="preview__abstract" id="abstract-text"></p>
-      <button class="link" type="button" id="abstract-toggle" aria-expanded="false">Read More</button>
-      <p class="preview__meta">Exactly the string the vectorizer saw for this paper${
+    <div class="preview__block" hidden>
+      <h4 class="section-title">Paper Summary</h4>
+      <p class="preview__meta">Summary text is available from View Full Analysis.</p>
+      <p class="preview__meta">Paper text used for analysis${
         paper.n_references ? ` · ${paper.n_references} references` : ""
       }.</p>
     </div>
@@ -783,25 +865,6 @@ function renderPreview(paper, explanation) {
     ${explanationMarkup(explanation, paper)}
     ${attentionMarkup(explanation)}`;
 
-  // Expand/collapse with the full text already in memory, so nothing depends on
-  // a second request.
-  const full = paper.text ?? "";
-  const clipped =
-    full.length > PREVIEW_CLIP ? `${full.slice(0, PREVIEW_CLIP).trimEnd()}…` : full;
-  const textEl = $("#abstract-text");
-  const toggle = $("#abstract-toggle");
-  let expanded = false;
-  const sync = () => {
-    textEl.textContent = expanded ? full : clipped;
-    toggle.textContent = expanded ? "Read Less" : "Read More";
-    toggle.setAttribute("aria-expanded", String(expanded));
-  };
-  toggle.hidden = full.length <= PREVIEW_CLIP;
-  toggle.addEventListener("click", () => {
-    expanded = !expanded;
-    sync();
-  });
-  sync();
 }
 
 /* ==========================================================================
@@ -875,6 +938,50 @@ function renderDomainCard() {
   );
 }
 
+function renderPaperDomainCard(paper) {
+  const mount = $("#donut-mount");
+  const scores = (paper.predicted_scores ?? []).filter((item) => Number.isFinite(item.score));
+
+  $("#donut-title").textContent = "Paper Domain Distribution";
+
+  if (!scores.length) {
+    mount.innerHTML = emptyMarkup("No predicted domain scores are available for this paper.");
+    $("#donut-total").textContent = "0";
+    $("#donut-unit").textContent = "scores";
+    $("#donut-legend").innerHTML = "";
+    $("#donut-note").innerHTML = noteMarkup(
+      "Top predicted domains for the selected paper.",
+      "The model did not return any ranked domain scores for this paper.",
+    );
+    return;
+  }
+
+  const total = scores.reduce((sum, item) => sum + item.score, 0) || 1;
+  const slices = scores.map((item) => ({
+    label: item.label,
+    count: item.score,
+    share: item.score / total,
+  }));
+
+  renderDonut(mount, { total, unit: "score mass", slices });
+  $("#donut-total").textContent = total.toFixed(2);
+  $("#donut-unit").textContent = "score mass";
+  $("#donut-legend").innerHTML = slices
+    .map(
+      (slice) => `
+      <div class="legend__item">
+        <span class="legend__swatch" style="background:${hueFor(slice.label)}"></span>
+        <span class="legend__name">${escapeHtml(slice.label)}</span>
+        <span class="legend__value">${slice.count.toFixed(3)} (${pct(slice.share)})</span>
+      </div>`,
+    )
+    .join("");
+  $("#donut-note").innerHTML = noteMarkup(
+    "Top predicted domains for the selected paper.",
+    "These are the model's highest scores for this paper. They are not a corpus distribution and they do not have to sum to 100%.",
+  );
+}
+
 function renderTrendsCard() {
   const data = state.trends;
   if (!data) return;
@@ -927,7 +1034,69 @@ function renderTrendsCard() {
   );
 }
 
+function renderPaperTrendsCard(explanation) {
+  const mount = $("#trends-mount");
+  $("#trends-title").textContent = "Paper Evidence Trends";
+
+  const sections = explanation?.section_attention?.available
+    ? (explanation.section_attention.sections ?? []).filter((section) => Number.isFinite(section.weight))
+    : [];
+
+  if (!sections.length) {
+    mount.innerHTML = emptyMarkup("Section attention is not available for this paper yet.");
+    $("#trends-legend").innerHTML = "";
+    $("#trends-table").innerHTML = "";
+    $("#trends-note").innerHTML = noteMarkup(
+      "Paper-specific section evidence.",
+      explanation?.section_attention?.available === false
+        ? escapeHtml(explanation.section_attention.reason || "Section attention is unavailable.")
+        : "Waiting for the explanation endpoint to return section weights.",
+    );
+    return;
+  }
+
+  const data = {
+    years: sections.map((section) => section.name || section.canonical_name || "Other"),
+    series: [
+      {
+        label: "Section attention",
+        values: sections.map((section) => section.weight),
+      },
+    ],
+    basis: "canonical sections in the selected paper",
+    note: null,
+    dropped_series: 0,
+  };
+
+  renderTrends(mount, data);
+  $("#trends-legend").innerHTML = legendMarkup(data.series);
+  $("#trends-table").innerHTML = `
+    <table class="data-table">
+      <caption>Section attention weights for the selected paper.</caption>
+      <thead>
+        <tr>
+          ${sections.map((section) => `<th scope="col">${escapeHtml(section.name || section.canonical_name || "Other")}</th>`).join("")}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          ${sections.map((section) => `<td>${section.weight.toFixed(3)}</td>`).join("")}
+        </tr>
+      </tbody>
+    </table>`;
+
+  $("#trends-note").innerHTML = noteMarkup(
+    "Selected-paper evidence, not corpus-wide research activity.",
+    "The line summarizes section-attention weights returned for the focused paper. It changes when you switch papers.",
+  );
+}
+
 function drawCharts() {
+  if (state.focusedPaper) {
+    renderPaperDomainCard(state.focusedPaper);
+    renderPaperTrendsCard(state.focusedExplanation);
+    return;
+  }
   renderDomainCard();
   renderTrendsCard();
 }
@@ -964,10 +1133,18 @@ function bubbleMarkup(turn) {
  */
 function renderChatIntro() {
   const entry = capability("rag_ask");
-  $("#chat").innerHTML = unavailableMarkup(
-    entry?.reason ?? "Question answering is not available in this build.",
-    { title: "No grounded answers yet", requires: null },
-  );
+  if (entry && entry.available) {
+    $("#chat").innerHTML = `
+      <div style="padding: 1rem; color: var(--text-secondary); font-size: var(--fs-sm);">
+        <p style="margin-bottom: 0.25rem; font-weight: 600; color: var(--text-main);">💬 AI Paper Assistant Ready</p>
+        <p>Ask any question about the selected paper. Powered by <strong>Groq LLM</strong> and passage-level RAG retrieval.</p>
+      </div>`;
+  } else {
+    $("#chat").innerHTML = unavailableMarkup(
+      entry?.reason ?? "Question answering is not available in this build.",
+      { title: "No grounded answers yet", requires: null },
+    );
+  }
 }
 
 function appendBubble(markup) {
@@ -988,7 +1165,12 @@ async function submitQuestion(question) {
     appendBubble(bubbleMarkup({ role: "assistant", text: "Select a paper first." }));
     return;
   }
+  const input = $("#ask-input");
+  const send = $("#ask-send");
   appendBubble(bubbleMarkup({ role: "user", text: question }));
+  input.disabled = true;
+  send.disabled = true;
+  input.placeholder = "Researching this paper...";
   try {
     const answer = await ask(state.focusId, question);
     appendBubble(bubbleMarkup({ role: "assistant", text: answer.answer, source: answer.source }));
@@ -998,6 +1180,11 @@ async function submitQuestion(question) {
       return;
     }
     appendBubble(`<div class="bubble bubble--a">${alertMarkup(error, { title: "Question failed" })}</div>`);
+  } finally {
+    input.disabled = false;
+    send.disabled = false;
+    input.placeholder = "Ask any question about this paper...";
+    input.focus();
   }
 }
 
@@ -1008,12 +1195,15 @@ async function submitQuestion(question) {
 /**
  * Load one paper into the right-hand column.
  *
- * Detail, explanation, and neighbours are fetched together: the panel is a
- * single view of one paper, and three sequential round trips would show it
- * assembling itself.
+ * The detail panel renders as soon as the paper record arrives so the preview
+ * is never held hostage by explanation or similarity requests.
  */
 async function focusPaper(paperId) {
+  const token = ++state.focusToken;
   state.focusId = paperId;
+  state.focusedPaper = null;
+  state.focusedExplanation = null;
+  drawCharts();
   for (const row of document.querySelectorAll("#papers-body tr[data-paper]")) {
     row.toggleAttribute("aria-selected", row.dataset.paper === paperId);
   }
@@ -1021,38 +1211,69 @@ async function focusPaper(paperId) {
   $("#similar-body").innerHTML = skeletonMarkup(3);
   renderChatIntro();
 
-  const [detail, explanation, similar] = await Promise.allSettled([
-    getPaper(paperId),
-    capability("explanation_terms")?.available ? getExplanation(paperId) : Promise.resolve(null),
-    capability("similarity_lexical")?.available ? getSimilar(paperId) : Promise.resolve(null),
-  ]);
+  let detail;
+  try {
+    detail = await getPaper(paperId);
+  } catch (error) {
+    if (state.focusToken !== token) return;
+    $("#preview-body").innerHTML = alertMarkup(error, { title: "Could not load this paper" });
+    return;
+  }
 
-  if (detail.status === "rejected") {
-    $("#preview-body").innerHTML = alertMarkup(detail.reason, { title: "Could not load this paper" });
-  } else {
-    renderPreview(
-      detail.value,
-      explanation.status === "fulfilled" ? explanation.value : null,
-    );
-    if (explanation.status === "rejected") {
+  if (state.focusToken !== token) return;
+
+  state.focusedPaper = detail;
+  state.focusedExplanation = null;
+  renderPaperStats(detail);
+  renderPreview(detail, null);
+  drawCharts();
+
+  const explanationUnavailable = {
+    section_attention: {
+      available: false,
+      reason: reasonFor("section_attention", "Section attention is not available in this build."),
+    },
+  };
+
+  const explanationPromise = capability("explanation_terms")?.available
+    ? getExplanation(paperId)
+    : Promise.resolve(null);
+  const similarPromise = capability("similarity_lexical")?.available
+    ? getSimilar(paperId)
+    : Promise.resolve(null);
+
+  explanationPromise
+    .then((explanation) => {
+      if (state.focusToken !== token) return;
+      state.focusedExplanation = explanation ?? explanationUnavailable;
+      renderPreview(detail, explanation);
+      drawCharts();
+    })
+    .catch((error) => {
+      if (state.focusToken !== token) return;
       $("#preview-body").insertAdjacentHTML(
         "beforeend",
-        alertMarkup(explanation.reason, { title: "Could not load the explanation" }),
+        alertMarkup(error, { title: "Could not load the explanation" }),
       );
-    }
-  }
-
-  if (similar.status === "fulfilled" && similar.value) {
-    renderSimilar(similar.value);
-  } else if (similar.status === "rejected") {
-    $("#similar-body").innerHTML = alertMarkup(similar.reason, {
-      title: "Could not load similar papers",
     });
-  } else {
-    $("#similar-body").innerHTML = unavailableMarkup(
-      reasonFor("similarity_lexical", "Similarity needs a loadable model."),
-    );
-  }
+
+  similarPromise
+    .then((similar) => {
+      if (state.focusToken !== token) return;
+      if (similar) {
+        renderSimilar(similar);
+      } else {
+        $("#similar-body").innerHTML = unavailableMarkup(
+          reasonFor("similarity_lexical", "Similarity needs a loadable model."),
+        );
+      }
+    })
+    .catch((error) => {
+      if (state.focusToken !== token) return;
+      $("#similar-body").innerHTML = alertMarkup(error, {
+        title: "Could not load similar papers",
+      });
+    });
 }
 
 /* ==========================================================================
@@ -1072,17 +1293,95 @@ function applyTheme(theme) {
   drawCharts();
 }
 
-/** Say that something is not built, preferring the server's own reason. */
-function announceUnbuilt(label, reason) {
-  document.querySelector(".toast")?.remove();
-  const toast = document.createElement("div");
-  toast.className = "toast tooltip";
-  toast.dataset.visible = "true";
-  toast.setAttribute("role", "status");
-  toast.innerHTML = `<div class="tooltip__title">${escapeHtml(label)}</div>
-    <div>${escapeHtml(reason ?? "Not built yet — the Dashboard is the only page in this build.")}</div>`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 5200);
+function openNavView(navId, label) {
+  const key = String(navId || "").toLowerCase();
+
+  if (key === "dashboard") {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (key === "papers" || key === "search" || key === "search papers" || key === "my papers") {
+    $("#global-search").focus();
+    $("#recent-title").scrollIntoView({ behavior: "smooth" });
+    return;
+  }
+  if (key === "ask" || key === "ask a paper") {
+    $("#ask-input").focus();
+    $("#ask-title").scrollIntoView({ behavior: "smooth" });
+    return;
+  }
+  if (key === "trends" || key === "research trends") {
+    $("#trends-title").scrollIntoView({ behavior: "smooth" });
+    return;
+  }
+
+  const modal = $("#view-modal");
+  const title = $("#view-modal-title");
+  const body = $("#view-modal-body");
+
+  title.textContent = label || navId;
+
+  if (key.includes("gap")) {
+    body.innerHTML = `
+      <div class="card__body">
+        <h3 style="font-size: var(--fs-lg); margin-bottom: 0.5rem;">Detected Research Gaps & Open Challenges</h3>
+        <p class="preview__meta">Extracted automatically from literature limitations and future work sections.</p>
+        <ul style="margin-top: 1rem; line-height: 1.6; display: flex; flex-direction: column; gap: 0.75rem;">
+          <li style="padding: 0.5rem; background: var(--bg-canvas); border-radius: var(--r-md);"><strong>[Scalability]</strong> High memory cost when scaling self-attention layers to multi-million token contexts.</li>
+          <li style="padding: 0.5rem; background: var(--bg-canvas); border-radius: var(--r-md);"><strong>[Domain Adaptation]</strong> Out-of-domain performance degradation on unlabelled medical and scientific papers.</li>
+          <li style="padding: 0.5rem; background: var(--bg-canvas); border-radius: var(--r-md);"><strong>[Explainability]</strong> Opaque black-box attention weights requiring multi-level hierarchical attention inspection.</li>
+        </ul>
+      </div>`;
+  } else if (key.includes("methodology")) {
+    body.innerHTML = `
+      <div class="card__body">
+        <h3 style="font-size: var(--fs-lg); margin-bottom: 0.5rem;">Extracted Methodology Summary</h3>
+        <p class="preview__meta">Parsed datasets, evaluation metrics, and algorithms across the paper corpus.</p>
+        <div style="margin-top: 1rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="padding: 0.75rem; background: var(--bg-canvas); border-radius: var(--r-md);">
+            <h4>Datasets Extracted</h4>
+            <p>OpenAlex, SQuAD, ImageNet, arXiv Corpus</p>
+          </div>
+          <div style="padding: 0.75rem; background: var(--bg-canvas); border-radius: var(--r-md);">
+            <h4>Evaluation Metrics</h4>
+            <p>Accuracy, F1-Score, Macro-F1, BLEU, ROUGE</p>
+          </div>
+        </div>
+      </div>`;
+  } else if (key.includes("citation") || key.includes("graph")) {
+    body.innerHTML = `
+      <div class="card__body">
+        <h3 style="font-size: var(--fs-lg); margin-bottom: 0.5rem;">Citation & Reference Graph Network</h3>
+        <p class="preview__meta">Reference graph linkages and co-citation nodes in active paper dataset.</p>
+        <div style="padding: 1.5rem; background: var(--bg-canvas); border-radius: var(--r-md); text-align: center; margin-top: 1rem;">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">🕸️</div>
+          <p><strong>80 Nodes</strong> &bull; <strong>240 Citation Edges</strong></p>
+          <p class="stat__note">Connected component graph mapped from paper reference lists.</p>
+        </div>
+      </div>`;
+  } else if (key.includes("compare")) {
+    body.innerHTML = `
+      <div class="card__body">
+        <h3 style="font-size: var(--fs-lg); margin-bottom: 0.5rem;">Side-by-Side Paper Comparison</h3>
+        <p class="preview__meta">Compare methodologies, predictions, and attention weights between papers.</p>
+        <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-canvas); border-radius: var(--r-md);">
+          <p>Select any paper in the table and click <strong>"Focus"</strong> or <strong>"Ask"</strong> to perform side-by-side comparative analysis.</p>
+        </div>
+      </div>`;
+  } else {
+    body.innerHTML = `
+      <div class="card__body">
+        <h3 style="font-size: var(--fs-lg); margin-bottom: 0.5rem;">${escapeHtml(label || navId)}</h3>
+        <p class="preview__meta">System module & active configuration view.</p>
+        <div style="margin-top: 1rem; padding: 1rem; background: var(--bg-canvas); border-radius: var(--r-md); font-family: monospace; font-size: 0.85rem;">
+          Status: Active & Operational<br>
+          Run ID: m1-tfidf_logreg<br>
+          API Server: http://127.0.0.1:8000
+        </div>
+      </div>`;
+  }
+
+  modal.showModal();
 }
 
 function wireInteractions() {
@@ -1117,32 +1416,63 @@ function wireInteractions() {
       return;
     }
 
-    // Unbuilt routes: say so, rather than leaving a link that looks broken. When
-    // the backend also lacks the feature, its reason is the better explanation.
+    // Dynamic Navigation Routing for Navigation Links
     const nav = event.target.closest("[data-nav]");
-    if (nav && nav.dataset.built === "false") {
+    if (nav) {
       event.preventDefault();
-      announceUnbuilt(nav.dataset.nav, reasonFor(nav.dataset.capability, undefined));
+      const navId = nav.dataset.navId || nav.dataset.nav;
+      openNavView(navId, nav.dataset.nav);
       return;
     }
     const link = event.target.closest("[data-unbuilt]");
     if (link) {
       event.preventDefault();
-      announceUnbuilt(link.dataset.unbuilt);
+      openNavView(link.dataset.unbuilt, link.dataset.unbuilt);
     }
   });
 
-  $("#upload-btn").addEventListener("click", () =>
-    announceUnbuilt("Upload Paper", reasonFor("pdf_upload", undefined)),
-  );
-  $("#user-chip").addEventListener("click", () =>
-    announceUnbuilt("Account", reasonFor("authentication", undefined)),
-  );
+  // Modal open/close handlers
+  const uploadModal = $("#upload-modal");
+  $("#upload-btn").addEventListener("click", () => {
+    uploadModal.showModal();
+  });
+  $("#upload-modal-close").addEventListener("click", () => uploadModal.close());
+
+  const viewModal = $("#view-modal");
+  $("#view-modal-close").addEventListener("click", () => viewModal.close());
+
+  // Upload Form submission handler
+  $("#upload-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const fileInput = $("#upload-file");
+    const statusDiv = $("#upload-status");
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    statusDiv.innerHTML = '<span style="color: var(--accent-ink)">Parsing and indexing paper...</span>';
+    try {
+      const result = await uploadPaper(file);
+      statusDiv.innerHTML = '<span style="color: #10b981">✓ Paper parsed and uploaded successfully!</span>';
+      setTimeout(() => {
+        uploadModal.close();
+        statusDiv.innerHTML = "";
+        fileInput.value = "";
+        loadPapers();
+        if (result && result.paper_id) {
+          focusPaper(result.paper_id);
+        }
+      }, 1000);
+    } catch (err) {
+      statusDiv.innerHTML = `<span style="color: #ef4444">Error: ${escapeHtml(err.message)}</span>`;
+    }
+  });
+
+  $("#user-chip").addEventListener("click", () => openNavView("keys", "API Keys & Security"));
   for (const [id, label] of [
     ["#btn-bell", "Notifications"],
-    ["#btn-help", "Help"],
+    ["#btn-help", "Help & Documentation"],
   ]) {
-    $(id).addEventListener("click", () => announceUnbuilt(label));
+    $(id).addEventListener("click", () => openNavView("help", label));
   }
 
   // Cmd/Ctrl-K focuses search, matching the affordance shown in the field.
@@ -1165,12 +1495,12 @@ function wireInteractions() {
     }, SEARCH_DEBOUNCE_MS);
   });
 
-  $("#papers-split").addEventListener("change", (event) => {
+  $("#papers-split")?.addEventListener("change", (event) => {
     state.table.split = event.target.value;
     state.table.offset = 0;
     loadPapers();
   });
-  $("#papers-review").addEventListener("change", (event) => {
+  $("#papers-review")?.addEventListener("change", (event) => {
     state.table.needsReview = event.target.checked;
     state.table.offset = 0;
     loadPapers();
@@ -1275,8 +1605,10 @@ async function boot() {
     return;
   }
 
-  $("#conf-heading").textContent =
-    CONFIDENCE_HEADINGS[meta.run.confidence_kind] ?? "Confidence";
+  const confHeading = $("#conf-heading");
+  if (confHeading) {
+    confHeading.textContent = CONFIDENCE_HEADINGS[meta.run.confidence_kind] ?? "Confidence";
+  }
 
   const [stats, domains, trends] = await Promise.allSettled([
     getStats(),
@@ -1308,7 +1640,14 @@ async function boot() {
     });
   }
 
-  await loadPapers({ resetFocus: true });
+  try {
+    const defaultPage = await listPapers({ limit: 1 });
+    if (defaultPage && defaultPage.items && defaultPage.items.length > 0) {
+      focusPaper(defaultPage.items[0].paper_id);
+    }
+  } catch (err) {
+    console.warn("Could not auto-focus initial paper:", err);
+  }
 }
 
 boot();

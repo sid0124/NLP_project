@@ -39,8 +39,8 @@ security:
   require_api_key: false
   api_key_header: X-API-Key
   # Request bodies above this are rejected with 413 before being read into
-  # memory. The only POST body is a title plus an abstract.
-  max_request_bytes: 65536
+  # memory. PDF paper uploads require up to 50 MB.
+  max_request_bytes: 52428800
   # Longest text accepted by POST /api/classify. Enforced by the schema, so an
   # oversized field is a 422 rather than an unbounded vectorizer call.
   max_text_chars: 20000

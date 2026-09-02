@@ -28,3 +28,5 @@ tqdm==4.66.5
 # --- Testing & linting ---
 pytest==8.3.2
 ruff==0.6.9
+python-multipart==0.0.32
+

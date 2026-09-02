@@ -108,47 +108,6 @@
           <div class="grid">
             <!-- ---------- Left column ---------- -->
             <div class="col">
-              <!-- Recent Paper Analysis -->
-              <section class="card" aria-labelledby="recent-title">
-                <div class="card__head">
-                  <h2 class="card__title" id="recent-title">Recent Paper Analysis</h2>
-                </div>
-                <!-- Filters in one row above the data they filter, so the control
-                     and its effect are read together. All three are applied by the
-                     API, not by slicing an already-fetched page. -->
-                <div class="filter-row">
-                  <label class="field">
-                    <span class="field__label">Split</span>
-                    <select class="field__control" id="papers-split">
-                      <option value="held_out" selected>Held out (val + test)</option>
-                      <option value="val">Validation</option>
-                      <option value="test">Test</option>
-                      <option value="train">Train</option>
-                      <option value="all">All splits</option>
-                    </select>
-                  </label>
-                  <label class="checkbox">
-                    <input type="checkbox" id="papers-review" />
-                    <span>Needs review only</span>
-                  </label>
-                </div>
-                <div class="card__body">
-                  <div class="table-wrap">
-                    <table class="table">
-                      <thead>
-                        <tr>
-                          <th scope="col">Paper</th>
-                          <th scope="col">Predicted Domain</th>
-                          <th scope="col" id="conf-heading">Confidence</th>
-                          <th scope="col"><span class="sr-only">Actions</span></th>
-                        </tr>
-                      </thead>
-                      <tbody id="papers-body"></tbody>
-                    </table>
-                  </div>
-                </div>
-                <div class="card__foot pager" id="papers-foot"></div>
-              </section>
 
               <div class="col__pair">
                 <!-- Domain Distribution -->
@@ -243,10 +202,39 @@
                 </div>
               </section>
             </div>
-          </div>
         </main>
       </div>
     </div>
+
+    <!-- Paper Upload Modal -->
+    <dialog class="modal" id="upload-modal">
+      <div class="modal__content card">
+        <div class="card__head">
+          <h2 class="card__title">Upload Research Paper (PDF / TXT)</h2>
+          <button class="icon-btn" type="button" id="upload-modal-close" aria-label="Close upload modal">&times;</button>
+        </div>
+        <form class="card__body" id="upload-form">
+          <p class="preview__meta">Select a PDF or text file to parse into canonical sections and index into the corpus.</p>
+          <div class="field" style="margin: 1rem 0;">
+            <label class="field__label" for="upload-file">Paper File (.pdf, .txt, .json)</label>
+            <input class="field__control" type="file" id="upload-file" accept=".pdf,.txt,.json" required style="padding: 0.5rem;" />
+          </div>
+          <div id="upload-status" style="margin-bottom: 1rem;"></div>
+          <button class="table-toggle" type="submit" id="upload-submit" style="width: 100%; justify-content: center; padding: 0.6rem;">Parse & Upload Paper</button>
+        </form>
+      </div>
+    </dialog>
+
+    <!-- View Overlay Modal -->
+    <dialog class="modal" id="view-modal">
+      <div class="modal__content card" style="max-width: 720px; width: 90%;">
+        <div class="card__head">
+          <h2 class="card__title" id="view-modal-title">Feature View</h2>
+          <button class="icon-btn" type="button" id="view-modal-close" aria-label="Close view modal">&times;</button>
+        </div>
+        <div class="card__body" id="view-modal-body" style="max-height: 70vh; overflow-y: auto;"></div>
+      </div>
+    </dialog>
 
     <script type="module" src="js/app.js"></script>
   </body>

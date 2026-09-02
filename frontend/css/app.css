@@ -1791,3 +1791,29 @@ svg {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Modal styling */
+.modal[open] {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100vw;
+  height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  border: none;
+  padding: 1rem;
+}
+
+.modal__content {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+  max-width: 540px;
+  width: 100%;
+
+}

@@ -489,7 +489,7 @@ class LoadedRun:
         return results
 
     # -- similarity --------------------------------------------------------
-    @cached_property
+    @property
     def _corpus_matrix(self) -> tuple[np.ndarray, list[str]]:
         """L2-normalised TF-IDF matrix for the whole corpus, plus its paper ids.
 
@@ -614,14 +614,22 @@ class LoadedRun:
                 counts[entry.record.label] = counts.get(entry.record.label, 0) + 1
         return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
 
-    @cached_property
+    @property
     def counts_by_year(self) -> dict[str, dict[int, int]]:
-        """``{label: {year: count}}`` over papers that recorded a year."""
-        minimum = self.settings.api.trends.min_year
+        """``{label: {year: count}}`` over papers that recorded a real year.
+
+        The dashboard only has one honest time axis here: the publication year
+        recorded on each paper. If a record does not carry one, it is skipped
+        instead of being assigned to a synthetic bucket, because a fabricated
+        year would make the trend chart look complete while being untrue.
+        """
         table: dict[str, dict[int, int]] = {}
         for entry in self.papers.values():
-            label, year = entry.record.label, entry.year
-            if not label or year is None or year < minimum:
+            label = entry.record.label
+            if not label:
+                continue
+            year = entry.year
+            if year is None:
                 continue
             table.setdefault(label, {})
             table[label][year] = table[label].get(year, 0) + 1

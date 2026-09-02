@@ -1,0 +1,12 @@
+
+Dashboard:  http://127.0.0.1:8000
+API docs:   http://127.0.0.1:8000/api/docs
+Health:     http://127.0.0.1:8000/api/health
+Serving run: m1-tfidf_logreg (TF-IDF + Logistic Regression)
+
+Ctrl+C to stop.
+
+2026-09-02T01:53:59 | INFO    | run=20260901T202359Z-20ddd3 | src.api.app                  | api | serving dashboard from D:\professional_documents\project_files\NLP_Project\frontend
+2026-09-02T01:53:59 | WARNING | run=20260901T202359Z-20ddd3 | src.api.app                  | api | no API key required — correct for 127.0.0.1, wrong for anything reachable from another host. Set ARIS_API_KEY and security.require_api_key to enable.
+2026-09-02T01:53:59 | INFO    | run=20260901T202359Z-20ddd3 | src.api.app                  | api | serving run m1-tfidf_logreg (TF-IDF + Logistic Regression, 4 classes)
+2026-09-02T01:53:59 | WARNING | run=20260901T202359Z-20ddd3 | src.api.app                  | api | run m1-tfidf_logreg was trained on the generated test corpus, not real papers. The dashboard labels this; do not read its metrics as results.
