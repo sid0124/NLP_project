@@ -31,9 +31,13 @@ __all__ = [
     "CorsConfig",
     "DatasetConfig",
     "DecisionConfig",
+    "EncoderConfig",
     "EnvSettings",
+    "HANConfig",
     "LabelsConfig",
+    "LongDocConfig",
     "ModelConfig",
+    "NeuralTrainingConfig",
     "PathsConfig",
     "SecurityConfig",
     "ServerConfig",
@@ -360,6 +364,69 @@ class TrainingConfig(BaseModel):
     save_model: bool
 
 
+# ===========================================================================
+# configs/model.yaml — Science Transformer encoder (Milestone 2+)
+# ===========================================================================
+class EncoderConfig(BaseModel):
+    """Scientific transformer encoder settings (SCI-BERT etc.)."""
+
+    # model_name legitimately describes the ML model, not pydantic's own config.
+    model_config = ConfigDict(extra="forbid", validate_assignment=True, protected_namespaces=())
+
+    model_name: str
+    #: Maximum tokeniser sequence length. Long papers are handled hierarchically
+    #: (sections -> sentences -> batches), never crammed into one sequence.
+    max_seq_length: int = Field(ge=16)
+    batch_size: int = Field(ge=1)
+    pooling: Literal["mean", "cls"]
+    #: On-disk sentence-embedding cache so repeated inference is not recomputed.
+    cache_dir: str = "data/embeddings"
+    device: Literal["auto", "cpu", "cuda"] = "auto"
+
+
+class HANConfig(BaseModel):
+    """Hierarchical Attention Network hyper-parameters (spec §7)."""
+
+    model_config = _STRICT
+
+    sentence_hidden_size: int = Field(ge=1)
+    section_hidden_size: int = Field(ge=1)
+    dropout: float = Field(ge=0.0, le=1.0)
+    #: Word-level encoder hidden size for the raw-token HAN variant; the
+    #: SciBERT-feature variant does not use a word encoder.
+    word_hidden_size: int = Field(ge=1)
+
+
+class LongDocConfig(BaseModel):
+    """Long-document processing bounds (spec §8)."""
+
+    model_config = _STRICT
+
+    max_sections: int = Field(ge=1)
+    max_sentences_per_section: int = Field(ge=1)
+
+
+class NeuralTrainingConfig(BaseModel):
+    """Shared training behaviour for transformer/HAN runs (Milestone 2+)."""
+
+    model_config = _STRICT
+
+    epochs: int = Field(ge=1)
+    learning_rate: float = Field(gt=0.0)
+    batch_size: int = Field(ge=1)
+    weight_decay: float = Field(ge=0.0)
+    warmup_steps: int = Field(ge=0)
+    #: Epochs without val improvement before stopping; 0 disables early stopping.
+    early_stopping_patience: int = Field(ge=0)
+    #: Max gradient norm for clipping; 0 disables clipping.
+    gradient_clip_norm: float = Field(ge=0.0)
+    #: Freeze the transformer encoder and train only the classification head.
+    freeze_encoder: bool = True
+    #: Class-imbalance handling: none | balanced | focal.
+    class_weighting: Literal["none", "balanced", "focal"] = "balanced"
+    focal_gamma: float = Field(ge=0.0)
+
+
 class PlotsConfig(BaseModel):
     """Which figures to render, and how."""
 
@@ -393,6 +460,10 @@ class ModelConfig(BaseModel):
     baselines: dict[str, BaselineConfig]
     training: TrainingConfig
     evaluation: EvaluationConfig
+    encoder: EncoderConfig
+    han: HANConfig
+    longdoc: LongDocConfig
+    neural_training: NeuralTrainingConfig
 
     @model_validator(mode="after")
     def _baselines_reference_known_vectorizers(self) -> ModelConfig:

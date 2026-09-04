@@ -66,6 +66,9 @@ class Paragraph(BaseModel):
     paragraph_id: str
     paragraph_order: int = Field(ge=0)
     text: str
+    #: Page provenance for PDF-extracted text (1-based). Populated by the PDF
+    #: parser so the RAG layer and the UI can cite "Section 4.2, Page 6".
+    page_number: int | None = None
 
     @property
     def char_count(self) -> int:
@@ -300,6 +303,12 @@ class DatasetRecord(BaseModel):
     multi-class target and ``labels`` the multi-label set; which one is
     authoritative follows ``labels.mode`` in configuration. ``title`` is
     retained purely so error-analysis output is human-readable.
+
+    The richer fields (``abstract``, ``full_text``, ``sections``, ``domain``,
+    ``authors``, ``year``, ``source``) are optional and mirror the dataset
+    contract in ``dataset_loader.py``: CSV/JSON/JSONL exports carry them, and
+    the hierarchical model consumes ``sections`` directly instead of
+    re-flattening the document.
     """
 
     model_config = _STRICT
@@ -315,6 +324,15 @@ class DatasetRecord(BaseModel):
     #: storing everything as one opaque JSON blob (§28).
     meta: dict[str, Any] = Field(default_factory=dict)
 
+    # --- Dataset-pipeline fields (spec §3) -----------------------------------
+    abstract: str = ""
+    full_text: str = ""
+    sections: list[PaperSection] = Field(default_factory=list)
+    domain: str | None = None
+    authors: list[Author] = Field(default_factory=list)
+    year: int | None = None
+    source: str = ""
+
     @property
     def char_count(self) -> int:
         """Length of the model input text in characters."""
@@ -324,3 +342,9 @@ class DatasetRecord(BaseModel):
     def word_count(self) -> int:
         """Whitespace-delimited token count of the model input text."""
         return len(self.text.split())
+
+    @property
+    def section_text(self) -> str:
+        """Section bodies joined in reading order ('' when no sections)."""
+        ordered = sorted(self.sections, key=lambda s: s.section_order)
+        return "\n\n".join(s.text for s in ordered if s.text)

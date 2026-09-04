@@ -52,6 +52,81 @@ baselines:
       # The evaluation layer degrades gracefully and skips probability-only
       # metrics for this model rather than failing.
 
+# =============================================================================
+# Scientific Transformer encoder (SciBERT) — Milestone 2+
+# Consumed by the TransformerClassifier baseline and by SciBERT + HAN.
+# =============================================================================
+encoder:
+  # allenai/scibert_scivocab_uncased is a BERT trained on 1.14M papers from
+  # Semantic Scholar. "uncased" halves the tokenizer's vocabulary size and is
+  # the standard cheap SciBERT choice for CPU training.
+  model_name: "allenai/scibert_scivocab_uncased"
+  # Sequences are truncated to this many tokens. Long papers are handled
+  # hierarchically (sections -> sentences -> batches) — never crammed whole
+  # into the sequence (spec §8).
+  max_seq_length: 256
+  batch_size: 16
+  # Pooling over the final hidden state to produce a fixed sentence vector.
+  #   mean -> mean over non-padded tokens (default, robust)
+  #   cls  -> the CLS token vector (BERT-style)
+  pooling: mean
+  # Directory where sentence embeddings are cached on disk, keyed by a hash of
+  # the input text, so repeated inference never recomputes unchanged sentences.
+  cache_dir: data/embeddings
+  # "auto" picks CUDA when available and falls back to CPU.
+  device: auto
+
+# =============================================================================
+# Hierarchical Attention Network (Milestone 2+) — spec §7
+# =============================================================================
+han:
+  # Per-sentence BiGRU hidden size (each direction contributes half).
+  sentence_hidden_size: 256
+  # Per-section BiGRU hidden size.
+  section_hidden_size: 256
+  # Dropout applied to sentence embeddings and the document representation.
+  dropout: 0.5
+  # Word-level hidden size (used only by the word-level HAN variant that
+  # embeds raw tokens; the SciBERT variant skips the word encoder).
+  word_hidden_size: 128
+
+# =============================================================================
+# Long-document processing bounds — spec §8
+# All values are configurable here; nothing in the codebase hard-codes them.
+# =============================================================================
+longdoc:
+  # A paper's first N sections are used; the tail (appendix, references) is
+  # typically noise for domain classification.
+  max_sections: 8
+  # Per section, at most this many sentences are encoded downstream.
+  max_sentences_per_section: 32
+
+# =============================================================================
+# Neural training behaviour (TransformerClassifier + HAN) — Milestone 2+
+# =============================================================================
+neural_training:
+  epochs: 10
+  learning_rate: 2.0e-5
+  batch_size: 16
+  weight_decay: 0.01
+  warmup_steps: 0
+  # Stop after this many epochs without an improvement on the validation
+  # primary metric. 0 disables early stopping.
+  early_stopping_patience: 3
+  # Max gradient norm for clipping; 0 disables clipping.
+  gradient_clip_norm: 1.0
+  # true -> train only the classification head on top of frozen SciBERT
+  # embeddings (fast, CPU-friendly, strong baseline).
+  # false -> fine-tune the encoder too (much slower; needs GPU for realistic
+  # runtimes on a full corpus).
+  freeze_encoder: true
+  # Class-imbalance handling (spec §9):
+  #   none     -> unweighted softmax cross-entropy
+  #   balanced -> inverse class-frequency weights fed to the loss
+  #   focal    -> Focal Loss with gamma below (Lin et al. 2017)
+  class_weighting: balanced
+  focal_gamma: 2.0
+
 training:
   # Which split drives model selection; test is touched only for final numbers.
   eval_split: val

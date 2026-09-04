@@ -21,14 +21,20 @@ and are exposed here rather than rediscovered by the evaluation layer:
   output is an uncalibrated signed distance from the hyperplane — not a
   probability. :func:`prediction_scores` reports which of the two it returned so
   nothing downstream can silently print a margin under a "confidence" heading.
+
+:class:`TFIDFClassifier` and :class:`TFIDFSVMClassifier` wrap that pipeline in
+the :class:`~src.models.base.BaseClassifier` interface so the transformer and
+HAN models can sit behind the same contract.
 """
 
 from __future__ import annotations
 
 import inspect
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
+import joblib
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -38,12 +44,15 @@ from sklearn.pipeline import Pipeline
 from sklearn.svm import LinearSVC
 
 from src.config.settings import ClassifierConfig, ModelConfig, VectorizerConfig
+from src.models.base import BaseClassifier
 from src.utils.logging import get_logger
 
 __all__ = [
     "CLASSIFIER_STEP",
     "VECTORIZER_STEP",
     "ScoreKind",
+    "TFIDFClassifier",
+    "TFIDFSVMClassifier",
     "UnknownEstimatorError",
     "build_baseline",
     "build_classifier",
@@ -275,3 +284,103 @@ def prediction_scores(estimator: Any, texts: Sequence[str]) -> tuple[np.ndarray 
         type(estimator).__name__,
     )
     return None, "unavailable"
+
+
+# ===========================================================================
+# BaseClassifier wrappers over the config-driven pipeline (spec §5)
+# ===========================================================================
+class TFIDFClassifier(BaseClassifier):
+    """TF-IDF features + a linear classifier, as one leak-safe object.
+
+    Wraps the pipeline built by :func:`build_baseline` so Baselines 1 and 2
+    speak the same interface as the transformer and HAN models. ``kind``
+    selects the head: ``"logistic_regression"`` (Baseline 1, calibrated-shaped
+    probabilities) or ``"linear_svc"`` (Baseline 2, decision margins).
+    """
+
+    def __init__(self, pipeline: Pipeline, *, kind: str = "logistic_regression") -> None:
+        self.pipeline = pipeline
+        self.kind = kind
+
+    @classmethod
+    def from_config(
+        cls,
+        settings: "Settings | ModelConfig",
+        baseline_key: str,
+        *,
+        seed: int = 42,
+        multilabel: bool = False,
+    ) -> "TFIDFClassifier":
+        """Build from a configured baseline key (e.g. ``"tfidf_logreg"``).
+
+        Args:
+            settings: Resolved settings, or just the model configuration.
+            baseline_key: Key into ``configs/model.yaml -> baselines``.
+            seed: Random seed forwarded to the pipeline construction.
+            multilabel: Wrap the head for multi-label targets.
+
+        Raises:
+            KeyError: When ``baseline_key`` names no configured baseline.
+        """
+        model_config = settings.model if hasattr(settings, "model") else settings
+        baseline = model_config.baselines.get(baseline_key)
+        if baseline is None:
+            available = sorted(model_config.baselines)
+            raise KeyError(f"Unknown baseline {baseline_key!r}. Configured: {available}")
+        pipeline = build_baseline(model_config, baseline_key, seed=seed, multilabel=multilabel)
+        return cls(pipeline, kind=baseline.classifier.type)
+
+    @property
+    def classes_(self) -> list[str]:
+        """Ordered class vocabulary from the fitted classifier step."""
+        classifier = self.pipeline.named_steps[CLASSIFIER_STEP]
+        return [str(c) for c in classifier.classes_]
+
+    def fit(self, texts: Sequence[str], labels: Sequence[str]) -> "TFIDFClassifier":
+        """Fit the vectorizer + classifier on the training split only."""
+        self.pipeline.fit(list(texts), list(labels))
+        return self
+
+    def predict(self, texts: Sequence[str]) -> list[str]:
+        """Predict class labels."""
+        return [str(p) for p in self.pipeline.predict(list(texts))]
+
+    def predict_proba(self, texts: Sequence[str]) -> np.ndarray:
+        """Return per-class scores.
+
+        Raises:
+            NotImplementedError: For the SVM head, whose scores are margins.
+        """
+        scores, kind = prediction_scores(self.pipeline, texts)
+        if kind == "decision":
+            raise NotImplementedError(
+                "The linear SVM exposes decision margins, not probabilities. "
+                "Consume prediction_scores()/scores_kind() instead so the UI "
+                "can label the column honestly."
+            )
+        if scores is None:
+            raise NotImplementedError("No score output available for this model.")
+        return scores
+
+    def scores_kind(self) -> ScoreKind:
+        """``"probability"`` for logistic regression, ``"decision"`` for SVM."""
+        return "decision" if self.kind == "linear_svc" else "probability"
+
+    def save(self, path: Path) -> Path:
+        """Persist the fitted pipeline with joblib."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self, path)
+        return path
+
+    @classmethod
+    def load(cls, path: Path) -> "TFIDFClassifier":
+        """Load a model written by :meth:`save`."""
+        model = joblib.load(path)
+        if not isinstance(model, TFIDFClassifier):
+            raise TypeError(f"{path} does not contain a TFIDFClassifier")
+        return model
+
+
+#: Alias making the two configured baselines explicit at the call site.
+TFIDFSVMClassifier = TFIDFClassifier

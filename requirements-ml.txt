@@ -1,0 +1,16 @@
+# =============================================================================
+# Milestone 2+ — Neural model stack (SciBERT + Hierarchical Attention Network)
+# Pinned for Python 3.11. Install on top of requirements.txt.
+#
+# CPU-only PyTorch (recommended for laptops / CI):
+#     pip install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-ml.txt
+#
+# GPU: omit the extra index; pip resolves the CUDA wheel from this file as-is.
+# The code auto-detects the device at runtime (see src/models/transformer_embeddings.py).
+# =============================================================================
+
+torch==2.3.1
+transformers==4.44.2
+tokenizers==0.19.1
+sentencepiece==0.2.0
+datasets==2.20.0

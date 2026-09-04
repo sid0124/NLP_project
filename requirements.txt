@@ -1,6 +1,11 @@
 # Milestone 1 — Research Dataset + Reproducible Baseline
-# Pinned for Python 3.11. No torch/transformers yet (those arrive in Milestone 2).
+# Pinned for Python 3.11.
 # These are direct dependencies; run `pip freeze > requirements-lock.txt` for a full lock.
+#
+# Neural dependencies (PyTorch, SciBERT, HAN) are kept separate so a baseline-only
+# install stays light — see requirements-ml.txt:
+#     pip install -r requirements-ml.txt [--index-url https://download.pytorch.org/whl/cpu]
+# =============================================================================
 
 # --- Core scientific stack ---
 numpy==1.26.4
@@ -24,6 +29,9 @@ requests==2.32.3
 # --- Model persistence & progress bars ---
 joblib==1.4.2
 tqdm==4.66.5
+
+# --- PDF parsing (uploaded papers; required by scripts/serve_api.py) ---
+pypdf==4.3.1
 
 # --- Testing & linting ---
 pytest==8.3.2

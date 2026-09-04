@@ -61,8 +61,9 @@ REVIEW_CAVEAT = (
 
 ATTENTION_UNAVAILABLE_REASON = (
     "Section-level attention needs the hierarchical attention network, which is "
-    "Milestone 3. The current model is a bag-of-words classifier and has no "
-    "representation of a section at all, so there is nothing to weight."
+    "not the active model. The current model is a bag-of-words classifier and "
+    "has no representation of a section at all, so there is nothing to weight. "
+    "Train the HAN (scripts/train_han.py) and pin it as the active run."
 )
 
 RAG_UNAVAILABLE_REASON = (
@@ -192,8 +193,15 @@ def capabilities_for(run: LoadedRun | None) -> list[Capability]:
         Capability(
             key="section_attention",
             label="Section attention",
-            available=has_model and run is not None,
-            reason=None if (has_model and run is not None) else ATTENTION_UNAVAILABLE_REASON,
+            # Real attention exists only when the active run is the HAN. A
+            # bag-of-words classifier has no representation of a section, so
+            # claiming availability for those runs would fabricate evidence.
+            available=run is not None and run.is_han,
+            reason=(
+                None
+                if (run is not None and run.is_han)
+                else ATTENTION_UNAVAILABLE_REASON
+            ),
         ),
         Capability(
             key="trends",
